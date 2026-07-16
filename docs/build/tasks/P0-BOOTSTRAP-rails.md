@@ -52,10 +52,12 @@ approved_hash: null
 ---
 
 ## Objective
+
 Create the rails and CI gates so every later task runs inside an enforced, evidenced, gate-controlled
 process — "build the rails before the train."
 
 ## Steps
+
 1. Root `CLAUDE.md` + `docs/build/CLAUDE.md` (invariants, DEV-001 policy, gates).
 2. `.claude/settings.json` deny-rules; minimal commands + reviewer agents.
 3. `docs/build/{plans,epics,tasks,state,evidence,approvals,deviations,decisions,risks,reviews,templates}` + `build-state.yaml`.
@@ -63,7 +65,9 @@ process — "build the rails before the train."
 5. Validate locally; capture evidence; update state + STATUS.
 
 ## Definition of done
+
 All acceptance criteria met; CI validators green locally; PR opened (not merged).
 
 ## Rollback
+
 Revert PR; no dependents.

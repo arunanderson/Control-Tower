@@ -25,7 +25,9 @@ approved_by: Arun (Phase-0 plan approval, 2026-07-16)
 ---
 
 ## Objective
+
 Provide the exact PoC harness so a human with a provisioned tenant can execute Gate-1 and append findings.
 
 ## Definition of done
+
 Scripts + README present; execution deferred to P0-T16 (needs tenant).

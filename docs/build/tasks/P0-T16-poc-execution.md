@@ -27,4 +27,5 @@ requires_human_approval: true
 ---
 
 ## Status
+
 **BLOCKED** — see repo-root `BLOCKED.md`. Harness ready (P0-T15). Cannot proceed without tenant access.

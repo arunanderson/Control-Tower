@@ -4,6 +4,7 @@ Scope: the living record of the build. The frozen blueprint (`/docs/blueprint`) 
 tree is how we execute it. See the root `CLAUDE.md` for invariants and gates.
 
 ## Directory contract
+
 - `plans/` — phase plans (`PHASE-N-PLAN.md`).
 - `epics/` — epic definitions (`EPIC-*.md`).
 - `tasks/` — task contracts (`P<phase>-T<nn>-slug.md`), one file per task; Markdown + YAML frontmatter.
@@ -18,11 +19,13 @@ tree is how we execute it. See the root `CLAUDE.md` for invariants and gates.
 - `templates/` — the canonical templates all artifacts must follow.
 
 ## IDs & lifecycle
+
 - Phases `PHASE-0`..`PHASE-6`; epics `EPIC-<phase>-<n>`; tasks `P<phase>-T<nn>`.
 - Task lifecycle: `draft → approved → in-progress → (blocked|failed) → complete`.
 - `build-state.yaml` is updated only as a task's Document step, riding the same PR as the work.
 
 ## Update protocol
+
 - Every task updates `state/build-state.yaml` + root `STATUS.md`.
 - Evidence is append-only; never rewrite a prior evidence bundle.
 - The dev-substitute registry (`state/dev-substitute-registry.md`) must list every dev-only

@@ -5,20 +5,20 @@ blueprint:
   freeze_ref: PD-006
 project:
   name: Enterprise AI Control Tower
-  production_target: Azure            # DEV-001: dev-only substitutes allowed, no prod dependency
+  production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
 current_phase: PHASE-0
-current_epic: EPIC-0-1                 # Build-control rails
+current_epic: EPIC-0-1 # Build-control rails
 current_task: P0-T08
-status: in_progress                    # bootstrapping the rails via the bootstrap PR
+status: in_progress # bootstrapping the rails via the bootstrap PR
 blocked:
   is_blocked: false
   reference: null
 gates:
-  gate_0_venture_decision: approved      # 2026-07-16 (Arun)
-  phase_0_plan: approved                 # 2026-07-16 (Arun)
-  dev_001_supabase: approved-with-conditions   # 2026-07-16 (Arun)
-  gate_1_poc_tenant: pending             # blocks PoC execution (E4) — human/tenant consent
-  database_engine_decision: recorded     # DEC-001; ratified on bootstrap PR merge
+  gate_0_venture_decision: approved # 2026-07-16 (Arun)
+  phase_0_plan: approved # 2026-07-16 (Arun)
+  dev_001_supabase: approved-with-conditions # 2026-07-16 (Arun)
+  gate_1_poc_tenant: pending # blocks PoC execution (E4) — human/tenant consent
+  database_engine_decision: recorded # DEC-001; ratified on bootstrap PR merge
 phases:
   - id: PHASE-0
     title: Foundations & Gate-1 PoCs
@@ -32,21 +32,33 @@ epics:
     status: in_progress
   - id: EPIC-0-6
     title: DB-engine decision & RLS spike (E6)
-    status: partial          # engine decided (DEC-001); RLS spike deferred to E2/E6 (needs skeleton)
+    status: partial # engine decided (DEC-001); RLS spike deferred to E2/E6 (needs skeleton)
   - id: EPIC-0-4
     title: Gate-1 PoC execution (E4)
-    status: blocked          # harness authored; execution needs provisioned tenant
+    status: blocked # harness authored; execution needs provisioned tenant
 tasks:
   - { id: P0-T01, title: Repo skeleton & folders, status: complete }
   - { id: P0-T02, title: CLAUDE.md constitution set, status: complete }
   - { id: P0-T03, title: .claude settings/commands/agents, status: complete }
-  - { id: P0-T04, title: build-control docs + templates + state, status: complete }
-  - { id: P0-T05, title: CI pipeline skeleton (format/self-test), status: complete }
+  - {
+      id: P0-T04,
+      title: build-control docs + templates + state,
+      status: complete,
+    }
+  - {
+      id: P0-T05,
+      title: CI pipeline skeleton (format/self-test),
+      status: complete,
+    }
   - { id: P0-T06, title: architecture-gate placeholder, status: complete }
   - { id: P0-T07, title: secret + dependency scanning, status: complete }
-  - { id: P0-T08, title: protected-path + task-contract + production-readiness gates, status: complete }
+  - {
+      id: P0-T08,
+      title: protected-path + task-contract + production-readiness gates,
+      status: complete,
+    }
   - { id: P0-T15, title: Gate-1 PoC harness (/poc), status: complete }
-  - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked }   # needs tenant
+  - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked } # needs tenant
 decisions:
   - { id: DEC-001, title: Database engine, status: recorded }
 deviations:

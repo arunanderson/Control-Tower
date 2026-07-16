@@ -3,20 +3,20 @@ id: PHASE-0-PLAN
 title: Phase 0 — Foundations & Gate-1 PoCs
 type: phase-plan
 schema_version: 1
-status: proposed            # proposed | approved | in_progress | complete
+status: proposed # proposed | approved | in_progress | complete
 authority:
   - docs/blueprint/implementation-handoff-package.md §6
   - docs/automation/automation-operating-model.md §4, §12
-requires_human_approval: true   # automation model §2: Arun approves the plan before task contracts
+requires_human_approval: true # automation model §2: Arun approves the plan before task contracts
 ---
 
 ## Preconditions (human gates — build does not start until these close)
 
 Per the repository's own authority, **no build (including the bootstrap rails PR) starts before these**:
 
-1. **Gate-0 venture decision closed.** automation §12: "none of this starts before Gate-0 closes"; revision §4: "Gate-0 is undecided — build must not start before it closes." Currently **awaiting executive decision**. — *Arun / executive*
-2. **DEV-001 (Supabase) decided.** See `docs/build/deviations/DEV-001-supabase-backend.md`. Recommended: reject; keep Azure + PostgreSQL/Azure SQL. — *Arun*
-3. **PoC-tenant provisioning** for Gate-1: representative M365 tenant + Agent 365 licence + four agent archetypes + Entra app registrations. Not autonomous (tenant consent). — *Arun / Platform Admin*
+1. **Gate-0 venture decision closed.** automation §12: "none of this starts before Gate-0 closes"; revision §4: "Gate-0 is undecided — build must not start before it closes." Currently **awaiting executive decision**. — _Arun / executive_
+2. **DEV-001 (Supabase) decided.** See `docs/build/deviations/DEV-001-supabase-backend.md`. Recommended: reject; keep Azure + PostgreSQL/Azure SQL. — _Arun_
+3. **PoC-tenant provisioning** for Gate-1: representative M365 tenant + Agent 365 licence + four agent archetypes + Entra app registrations. Not autonomous (tenant consent). — _Arun / Platform Admin_
 
 ## Objective
 
@@ -25,6 +25,7 @@ Establish the build-control rails, the CI trust boundary, and the architectural 
 ## Two lanes (different owners, one convergence at GATE-P0)
 
 **Track A — Software foundations (agent-autonomous once Gate-0 + DEV-001 close):**
+
 - **E0 — Build-control rails** (the single human-reviewed bootstrap PR): root + `docs/build` CLAUDE.md; `.claude/settings.json` deny-writes to `/docs/blueprint` and `/docs/build/approvals`; `docs/build/{phases,epics,tasks,evidence,approvals,deviations,risks,reviews,templates}` + `build-state.yaml`; templates; PR template; CODEOWNERS.
 - **E1 — CI trust boundary**: GitHub Actions — format, secret scan (gitleaks + push protection), dependency scan, protected-paths gate, task-contract-validation gate, architecture-gate placeholder. Each proven to fail on a deliberate violation.
 - **E2 — Platform skeleton & tenancy context** (stack-dependent on DB decision): .NET modular monolith (Host.Web + Host.Worker, Modules C1–C9, Platform/); unforgeable tenancy context injected at boundary; authenticated plane seam; privileged-zone skeleton.
@@ -32,6 +33,7 @@ Establish the build-control rails, the CI trust boundary, and the architectural 
 - **E6 — DB-engine decision & RLS performance spike**: close PostgreSQL-vs-Azure-SQL on Azure (ADR-023 amend. 1); RLS/tenant-isolation spike at representative volume (Stage 9 assumption).
 
 **Track B/C — Validation & finalisation (human/commissioned, parallel):**
+
 - **E5 — Stage 3 re-validation** (kickoff quarterly ritual): roadmap-watch register, `agentRegistry` deprecation, preview→GA, SKU/licence/auth assumptions.
 - **E4 — Gate-1 PoC execution** (PoC-1/2/3, `/poc` quarantined, never referenced by `/src`; needs real tenant + credentials — human-run). PoC-1 failure → escalate before Stage 5.
 - **E7 — Stage 5 finalisation** (pre-authorised PD-006 revision): resolve the four ⛔PoC markers (alias types per archetype, confidence rule table, native-ID reuse/validity windows); v0.9 → final. Human-led (writes into frozen blueprint via the revision process — the build agent must not edit `/docs/blueprint`).

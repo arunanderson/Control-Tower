@@ -4,6 +4,7 @@ This file is loaded into every build session. It is the top authority for **how*
 build runs. The **what** is the frozen blueprint in `/docs/blueprint`.
 
 ## 1. Source of truth
+
 - `/docs/blueprint/**` is the **frozen** product blueprint. It is **read-only**. Never create,
   edit, move, or delete anything under it. Changes happen only via the PD-006 revision process,
   performed by a human.
@@ -12,6 +13,7 @@ build runs. The **what** is the frozen blueprint in `/docs/blueprint`.
 - `STATUS.md` (repo root) is the single build-status file; keep it current.
 
 ## 2. Frozen architecture invariants (non-negotiable)
+
 - **Two doors:** C4 is the only path in/out for external signals; C7 the only path for
   human-facing experiences (ADR-009/020).
 - **I3/I4:** nothing reads provider surfaces except C4 adapters; no pipeline shortcuts;
@@ -27,6 +29,7 @@ build runs. The **what** is the frozen blueprint in `/docs/blueprint`.
   enumeration** (ADR-021).
 
 ## 3. Production target & development substitutes (DEV-001, approved 2026-07-16)
+
 - **Production is Azure.** Supabase / any BaaS is **not** the production backend.
 - **Development-only substitutes** (local Docker Postgres, local queue/blob emulators, etc.) are
   permitted **only** when: (1) isolated to dev/test, (2) no architectural dependency — accessed
@@ -37,6 +40,7 @@ build runs. The **what** is the frozen blueprint in `/docs/blueprint`.
   (`production-readiness` gate + architecture-boundary tests).
 
 ## 4. Task-contract protocol
+
 - No work without an **approved task contract** in `docs/build/tasks/`. No contract → no code.
 - One writer at a time. One task per session. Work strictly within the contract's `allowed_files`.
 - After every task: run local gates, capture raw output to `docs/build/evidence/`, update
@@ -45,21 +49,25 @@ build runs. The **what** is the frozen blueprint in `/docs/blueprint`.
   raise a `docs/build/deviations/` entry — never silently change scope.
 
 ## 5. Evidence & honesty
+
 - **Never claim completion without passing validation evidence** captured to `docs/build/evidence/`.
 - CI is the trust boundary; local checks are advisory. Never fabricate or assume results.
 
 ## 6. Stop conditions
+
 - Stop and write a `BLOCKED.md` (repo root) + set `build-state.blocked` when: a validation fails
   **twice** on the same task; a contract is ambiguous or conflicts with the blueprint; forbidden
   files must be touched; a previously-green gate regresses; or a human gate is reached.
 
 ## 7. Human gates (never automated)
+
 Merging PRs · granting Microsoft tenant permissions/consent · executing migrations against shared
 or production environments · creating/exposing production secrets · production deployment · changing
 frozen architecture · approving deviations · signing phase gates. **Never** commit secrets, force-push
 `main`, or merge your own PR.
 
 ## 8. Pointers
+
 State: `docs/build/state/build-state.yaml` · Current plan: `docs/build/plans/PHASE-0-PLAN.md` ·
 Decisions: `docs/build/decisions/` · Deviations: `docs/build/deviations/` · Templates:
 `docs/build/templates/`.

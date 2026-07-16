@@ -2,14 +2,14 @@
 
 _Single source of build truth. Updated by the build agent as part of every task's Document step._
 
-| Field | Value |
-|---|---|
-| **Current phase** | Phase 0 — Foundations & Gate-1 PoCs |
-| **Current epic** | E0/E1 rails complete; E6 DB decision recorded; E4 PoCs **blocked** |
-| **Current task** | P0-T16 (PoC execution) — BLOCKED on tenant |
+| Field             | Value                                                                           |
+| ----------------- | ------------------------------------------------------------------------------- |
+| **Current phase** | Phase 0 — Foundations & Gate-1 PoCs                                             |
+| **Current epic**  | E0/E1 rails complete; E6 DB decision recorded; E4 PoCs **blocked**              |
+| **Current task**  | P0-T16 (PoC execution) — BLOCKED on tenant                                      |
 | **Overall state** | **Bootstrap PR open (awaiting merge); PoC execution blocked (awaiting tenant)** |
-| **Last updated** | 2026-07-16 |
-| **Updated by** | Claude Code (build agent) |
+| **Last updated**  | 2026-07-16                                                                      |
+| **Updated by**    | Claude Code (build agent)                                                       |
 
 ## Completed work
 
