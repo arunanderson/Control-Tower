@@ -3,12 +3,12 @@ id: DEV-001
 title: Proposed use of Supabase as the Control Tower backend
 type: deviation-proposal
 schema_version: 1
-status: proposed            # proposed | approved | rejected | withdrawn
+status: approved-with-conditions   # proposed | approved | rejected | withdrawn
 raised_by: Claude Code (build agent)
 raised_at: 2026-07-16
-decision: pending           # pending | approve | reject | approve-with-conditions
-decided_by: null
-decided_at: null
+decision: approve-with-conditions  # pending | approve | reject | approve-with-conditions
+decided_by: Arun (a.anderson@quadient.com) — direct instruction (to be ratified by merging PR #1)
+decided_at: 2026-07-16
 affects_adrs: [ADR-021, ADR-022, ADR-023]
 affects_principles:
   - "credentials isolated more strongly than data (ADR-021)"
@@ -77,3 +77,23 @@ Supabase is a **third‑party, AWS‑hosted Backend‑as‑a‑Service** (manage
 - [ ] **Approve** — adopt Supabase as backend; this requires a **formal PD‑006 revision** of ADR‑022/023 (and ADR‑021 mitigations for secrets + WORM), authored and approved before any build against it.
 
 **Status: STOPPED pending Arun's decision. No code will be written against Supabase until this deviation is decided.**
+
+## 7. Decision (recorded 2026-07-16)
+
+**Arun's decision (direct instruction): APPROVE WITH CONDITIONS.**
+
+- **Azure remains the production target.** Supabase — and any BaaS — is **rejected as a production backend**. ADR‑022/023 stand unchanged; the frozen DB decision remains **PostgreSQL vs Azure SQL on Azure**. **No PD‑006 revision is triggered** (frozen architecture is unchanged).
+- **Development‑only substitutes are permitted** (e.g. local Docker PostgreSQL, local queue/blob emulators, or a managed‑Postgres/Supabase scratch instance) **only** under **all** of:
+  1. **Isolated to development/test** — never referenced by production IaC (Bicep), production config, or any production path.
+  2. **No architectural dependency** — accessed solely through the port/adapter interfaces (DB via **standard SQL only**, no engine‑specific features per ADR‑023 amend. 1; secrets/queue/blob behind their adapters); no provider SDK in the domain.
+  3. **Replaceable before production without changing application architecture** — substitutes are alternate adapter implementations, swapped by configuration.
+  4. **Clearly marked development‑only** — naming + config convention; listed in a dev‑substitute registry.
+- **Hard rule:** no development shortcut may become a production dependency.
+
+### Enforcement (to be wired when the rails / CI are built — E0/E1)
+- **Architecture‑boundary tests:** no provider SDK or engine‑specific API outside its adapter; the domain depends only on ports (extends the two‑doors / I3‑I4 rule set).
+- **Production‑readiness CI gate:** fails if any dev‑substitute reference (dev adapter, emulator host, non‑Azure endpoint) appears in production config or `/infra`.
+- **Standard‑SQL‑only check** on migrations (ADR‑023 amend. 1).
+- **Dev‑substitute registry** in `docs/build/state/` — every substitute + its production (Azure) replacement, so replacement before production is a checklist, not archaeology.
+
+This decision closes DEV‑001. It does **not** close Gate‑0, approve the Phase 0 plan, or grant tenant access — those remain open (see STATUS.md).
