@@ -1,0 +1,27 @@
+# Claude Code local/personal
+.claude/settings.local.json
+.claude/*.lock
+.claude/scheduled_tasks*
+
+# Secrets & local env — never commit
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+appsettings.*.local.json
+**/secrets/**
+
+# Build output (future .NET / web)
+bin/
+obj/
+node_modules/
+dist/
+*.user
+
+# OS
+.DS_Store
+
+# PoC local artifacts (findings notes are committed explicitly)
+poc/**/local/
+poc/**/*.secret

@@ -1,0 +1,18 @@
+name: dependency-scan
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  osv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: OSV scanner (no-op until manifests exist)
+        run: |
+          if ls **/package.json **/*.csproj >/dev/null 2>&1; then
+            echo "dependency manifests present — running OSV scanner"
+            docker run --rm -v "$PWD":/src ghcr.io/google/osv-scanner:latest scan --recursive /src || exit 1
+          else
+            echo "no dependency manifests yet (bootstrap PR adds no runtime deps) — gate reserved"
+          fi

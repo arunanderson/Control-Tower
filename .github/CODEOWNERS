@@ -1,0 +1,8 @@
+# Protected paths — require the owner's review (enable "Require review from Code Owners" +
+# branch protection on main). These are the real enforcement for immutability, not the agent.
+
+/docs/blueprint/            @arunanderson
+/docs/build/approvals/      @arunanderson
+/.github/workflows/         @arunanderson
+/.github/CODEOWNERS         @arunanderson
+/.claude/                   @arunanderson
