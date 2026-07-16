@@ -36,7 +36,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Test status
 
-- Local validators: **all green**; negative tests confirm gates fail on violations. CI runs on the PR (authoritative). No product/unit/integration/e2e tests yet (no application code — correct for Phase 0 rails).
+- **CI on PR #1: 7/7 green** (format, secret-scan/gitleaks, dependency-scan/osv, protected-paths, task-contract-validation, architecture-gate, production-readiness). Negative tests confirm gates fail on violations. No product/unit/integration/e2e tests yet (no application code — correct for Phase 0 rails).
 
 ## Deployment status
 
