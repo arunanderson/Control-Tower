@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="NetArchTest.Rules" Version="1.3.2" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ControlTower.Platform\ControlTower.Platform.csproj" />
+    <ProjectReference Include="..\..\src\Modules\ControlTower.Modules.Ledger\ControlTower.Modules.Ledger.csproj" />
+    <ProjectReference Include="..\..\src\Modules\ControlTower.Modules.Governance\ControlTower.Modules.Governance.csproj" />
+    <ProjectReference Include="..\..\src\Modules\ControlTower.Modules.Economics\ControlTower.Modules.Economics.csproj" />
+    <ProjectReference Include="..\..\src\Modules\ControlTower.Modules.Providers\ControlTower.Modules.Providers.csproj" />
+    <ProjectReference Include="..\..\src\Modules\ControlTower.Modules.EnterpriseContext\ControlTower.Modules.EnterpriseContext.csproj" />
+    <ProjectReference Include="..\..\src\Modules\ControlTower.Modules.Experience\ControlTower.Modules.Experience.csproj" />
+    <ProjectReference Include="..\..\src\Modules\ControlTower.Modules.Trust\ControlTower.Modules.Trust.csproj" />
+    <ProjectReference Include="..\..\src\Modules\ControlTower.Modules.Audit\ControlTower.Modules.Audit.csproj" />
+  </ItemGroup>
+
+</Project>
