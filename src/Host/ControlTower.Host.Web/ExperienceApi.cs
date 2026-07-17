@@ -2,6 +2,7 @@ using ControlTower.Modules.Economics.Application;
 using ControlTower.Modules.Governance.Application;
 using ControlTower.Modules.Ledger.Application;
 using ControlTower.Modules.Ledger.Domain;
+using ControlTower.Modules.Providers.Application;
 using ControlTower.Platform.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -56,5 +57,8 @@ public static class ExperienceApi
             areas = new[] { "Portfolio", "Economics", "Governance", "Trust", "Administration" },
             readModelOnly = true,
         }));
+
+        // Registered providers (C4.5 discovery / metadata) — manifests only.
+        api.MapGet("/admin/providers", (IProviderRegistry registry) => Results.Ok(registry.Discover()));
     }
 }
