@@ -1,5 +1,7 @@
 using ControlTower.Adapters.InMemory;
 using ControlTower.Host.Web;
+using ControlTower.Modules.Economics;
+using ControlTower.Modules.Economics.Application;
 using ControlTower.Modules.Ledger;
 using ControlTower.Modules.Ledger.Application;
 using ControlTower.Platform.DependencyInjection;
@@ -14,6 +16,7 @@ if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddInMemoryAdapters();
     builder.Services.AddLedgerModule();
+    builder.Services.AddEconomicsModule();
 }
 
 var app = builder.Build();
@@ -37,6 +40,17 @@ if (app.Environment.IsDevelopment())
     app.MapGet("/assets", async (IAssetLedgerReadModel readModel, ITenantContextAccessor tenants) =>
         tenants.HasTenant
             ? Results.Ok(await readModel.QueryAsync())
+            : Results.BadRequest(new { error = "tenant context required" }));
+
+    // Minimal economics read-model contract (dev-only). Every figure carries its evidence fields.
+    app.MapGet("/economics/portfolio", async (EconomicsProjectionService economics, ITenantContextAccessor tenants) =>
+        tenants.HasTenant
+            ? Results.Ok(await economics.PortfolioRoiAsync(DateTimeOffset.UtcNow))
+            : Results.BadRequest(new { error = "tenant context required" }));
+
+    app.MapGet("/economics/executive", async (EconomicsProjectionService economics, ITenantContextAccessor tenants) =>
+        tenants.HasTenant
+            ? Results.Ok(await economics.ExecutiveAsync(DateTimeOffset.UtcNow))
             : Results.BadRequest(new { error = "tenant context required" }));
 }
 

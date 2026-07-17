@@ -4,9 +4,9 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 | Field             | Value                                                                                                  |
 | ----------------- | ------------------------------------------------------------------------------------------------------ |
-| **Current phase** | Phase 2 — Asset Ledger (C1)                                                                            |
-| **Current epic**  | Asset Ledger complete (PR open); Cost & Value Intelligence (C3) next                                   |
-| **Current task**  | P2-T01 complete                                                                                        |
+| **Current phase** | Phase 3 — Cost & Value Intelligence (C3)                                                               |
+| **Current epic**  | Economics complete (PR open); Governance (C2) next                                                     |
+| **Current task**  | P3-T01 complete                                                                                        |
 | **Overall state** | **Building autonomously via merge trains. No blocking gate.**                                          |
 | **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report; emergent-first |
 | **Last updated**  | 2026-07-17                                                                                             |
@@ -14,11 +14,11 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Completed & merged on `main`
 
-- **E0/E1 rails + CI** (PR #1) · **E2 platform skeleton + tenancy + NetArchTest** (PR #3) · **E3 event backbone** (PR #4) · **Platform foundation** — host DI, tenancy middleware, outbox dispatcher, dev adapters (PR #5).
+- **E0/E1 rails + CI** (#1) · **E2 platform skeleton + tenancy + NetArchTest** (#3) · **E3 event backbone** (#4) · **Platform foundation** (#5) · **Asset Ledger (C1)** (#6).
 
 ## In progress (PR open)
 
-- **Asset Ledger (C1), P2-T01:** `AIAsset` aggregate (one aggregate, all types) · `RegistrationStatus` + `OperationalLifecycle` state machines (guarded) · temporal ownership with **Ownerless/Lapsed** first-class · provider identifier aliases + `ResolutionLink` foundations + **MatchConfidence** roll-up · domain events appended to the immutable stream · `TaxonomyScheme` · tenant-scoped repository + read model via ports (dev in-memory; PostgreSQL later) · registration workflow with an authorization seam · dev-only `/assets` read endpoint. **31 tests green** (Platform 10, Architecture 5, Ledger 13, Host.Web 3); 0 vulnerable packages. Emergent within C1 — no new context/aggregate. Merge Readiness Report on the PR.
+- **Cost & Value Intelligence (C3), P3-T01:** one economics semantic model → six read models. Cost/usage observations (immutable) + value declarations (revision chain, forward-only Finance validation ladder: Estimated → SystemObserved → BusinessValidated → FinanceVerified) · **six evidence classes**, structurally enforced (no `EconomicFigure`/`EconomicAmount` without source, class, methodology, as-of, validation) · cost allocation + **Unattributed never spread** · ROI honesty (range + confidence mix, single-point suppressed when >25% soft, validated-only ROI, payback, trailing-12m) · read models **Asset Economics, Agent ROI (filter, no module), Department ROI, Business Unit ROI, Portfolio ROI, Executive dashboard** · reporting periods/snapshots + as-of reproducibility · dev-only `/economics/*` endpoints. **47 tests green** (Platform 10, Architecture 5, Ledger 13, Economics 16, Host.Web 3); 0 vulnerable packages. Emergent within C3 — no new context/aggregate, no per-ROI module. Merge Readiness Report on the PR.
 
 ## Blocked (parallel workstream, not the critical path)
 
@@ -32,7 +32,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Test status
 
-- Local & CI: **31 tests green**; build 0/0; 0 vulnerable packages; module + adapter boundaries enforced.
+- Local & CI: **47 tests green**; build 0/0; 0 vulnerable packages; module + adapter boundaries enforced.
 
 ## Deployment status
 
@@ -40,4 +40,4 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Next autonomous train
 
-- **Priority 3 — Cost & Value Intelligence (C3):** cost observations, cost allocation + Unattributed, usage/adoption facts, value declarations with the six evidence classes, Finance-validation states, ROI calculation projections, **Agent ROI as an emergent read model over `AIAsset`** (no separate module), and portfolio/department/agent economics projections — with tests proving no economic figure is exposed without evidence class, source, methodology, and as-of date. Tenant-independent. Provider integrations remain the parallel tenant workstream.
+- **Priority 4 — Governance (C2):** intake, risk-based approvals, reviews, exceptions, recertification, retirement; reuse/extend/compose/build-new decision recording; native-control orchestration where supported — all within the existing Governance module (V1.5 socket already in the domain model), tenant-independent. Provider integrations remain the parallel tenant workstream.

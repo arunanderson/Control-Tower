@@ -6,9 +6,9 @@ blueprint:
 project:
   name: Enterprise AI Control Tower
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
-current_phase: PHASE-2 # Asset Ledger; platform foundation complete on main
-current_epic: EPIC-2-1 # AI Asset Ledger (C1)
-current_task: P2-T01 # complete
+current_phase: PHASE-3 # Cost & Value Intelligence; Asset Ledger complete on main
+current_epic: EPIC-3-1 # Cost & Value Intelligence (C3)
+current_task: P3-T01 # complete
 status: in_progress
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
@@ -49,6 +49,7 @@ epics:
       status: complete,
     }
   - { id: EPIC-2-1, title: "AI Asset Ledger (C1)", status: complete }
+  - { id: EPIC-3-1, title: "Cost & Value Intelligence (C3)", status: complete }
   - { id: EPIC-0-4, title: Gate-1 PoC execution (E4), status: blocked } # parallel, not critical path
 tasks:
   - { id: P0-BOOTSTRAP, title: Rails + CI, status: complete }
@@ -72,6 +73,11 @@ tasks:
       title: "Asset Ledger (C1) — aggregate, state machines, ownership, aliases, events, read model, workflow",
       status: complete,
     }
+  - {
+      id: P3-T01,
+      title: "Cost & Value Intelligence (C3) — one economics model, many ROI read models",
+      status: complete,
+    }
   - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked }
 decisions:
   - { id: DEC-001, title: Database engine (Azure PostgreSQL), status: recorded }
@@ -82,10 +88,15 @@ merged_prs:
   - { number: 3, title: E2 platform skeleton }
   - { number: 4, title: E3 event backbone }
   - { number: 5, title: Platform foundation }
+  - { number: 6, title: Asset Ledger (C1) }
 open_prs:
-  - { branch: phase-2/asset-ledger, title: "Asset Ledger (C1)", state: open }
+  - {
+      branch: phase-3/economics,
+      title: "Cost & Value Intelligence (C3)",
+      state: open,
+    }
 next_trains:
-  - "Cost & Value Intelligence (C3): cost observations, allocation, Unattributed, usage/adoption, value declarations, evidence classes, Finance validation, ROI projections, Agent ROI read model over AIAsset"
+  - "Governance (C2, Priority 4): intake, risk-based approvals, reviews, exceptions, recertification, retirement, reuse/extend/compose/build-new decision recording, native-control orchestration where supported"
   - "tenant workstream (parallel): Gate-1 PoCs, provider adapters"
-test_summary: "31 tests green (Platform 10, Architecture 5, Ledger 13, Host.Web 3); 0 vulnerable packages"
-last_updated_by: P2-T01
+test_summary: "47 tests green (Platform 10, Architecture 5, Ledger 13, Economics 16, Host.Web 3); 0 vulnerable packages"
+last_updated_by: P3-T01
