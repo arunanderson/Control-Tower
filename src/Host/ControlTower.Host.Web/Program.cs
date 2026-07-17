@@ -2,6 +2,8 @@ using ControlTower.Adapters.InMemory;
 using ControlTower.Host.Web;
 using ControlTower.Modules.Economics;
 using ControlTower.Modules.Economics.Application;
+using ControlTower.Modules.Governance;
+using ControlTower.Modules.Governance.Application;
 using ControlTower.Modules.Ledger;
 using ControlTower.Modules.Ledger.Application;
 using ControlTower.Platform.DependencyInjection;
@@ -17,6 +19,7 @@ if (builder.Environment.IsDevelopment())
     builder.Services.AddInMemoryAdapters();
     builder.Services.AddLedgerModule();
     builder.Services.AddEconomicsModule();
+    builder.Services.AddGovernanceModule();
 }
 
 var app = builder.Build();
@@ -51,6 +54,17 @@ if (app.Environment.IsDevelopment())
     app.MapGet("/economics/executive", async (EconomicsProjectionService economics, ITenantContextAccessor tenants) =>
         tenants.HasTenant
             ? Results.Ok(await economics.ExecutiveAsync(DateTimeOffset.UtcNow))
+            : Results.BadRequest(new { error = "tenant context required" }));
+
+    // Minimal governance read-model contract (dev-only).
+    app.MapGet("/governance/cases", async (GovernanceService governance, ITenantContextAccessor tenants) =>
+        tenants.HasTenant
+            ? Results.Ok(await governance.CasesAsync(DateTimeOffset.UtcNow))
+            : Results.BadRequest(new { error = "tenant context required" }));
+
+    app.MapGet("/governance/debt", async (GovernanceService governance, ITenantContextAccessor tenants) =>
+        tenants.HasTenant
+            ? Results.Ok(await governance.DebtAsync())
             : Results.BadRequest(new { error = "tenant context required" }));
 }
 
