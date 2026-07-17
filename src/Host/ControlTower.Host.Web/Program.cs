@@ -1,5 +1,7 @@
 using ControlTower.Adapters.InMemory;
 using ControlTower.Host.Web;
+using ControlTower.Modules.Ledger;
+using ControlTower.Modules.Ledger.Application;
 using ControlTower.Platform.DependencyInjection;
 using ControlTower.Platform.Tenancy;
 
@@ -7,10 +9,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControlTowerPlatform();
 
-// DEV-001: in-memory port substitutes are registered for local/dev only, never in production.
+// DEV-001: in-memory port substitutes + dev module wiring are registered for local/dev only.
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddInMemoryAdapters();
+    builder.Services.AddLedgerModule();
 }
 
 var app = builder.Build();
@@ -27,6 +30,15 @@ app.MapGet("/whoami", (ITenantContextAccessor tenants) =>
     tenants.HasTenant
         ? Results.Ok(new { tenant = tenants.Current.ToString() })
         : Results.BadRequest(new { error = "tenant context required" }));
+
+// Minimal read-model contract for the Asset Ledger (dev-only; production read APIs are a later phase).
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/assets", async (IAssetLedgerReadModel readModel, ITenantContextAccessor tenants) =>
+        tenants.HasTenant
+            ? Results.Ok(await readModel.QueryAsync())
+            : Results.BadRequest(new { error = "tenant context required" }));
+}
 
 app.Run();
 

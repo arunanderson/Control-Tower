@@ -11,6 +11,9 @@ fail if the kernel or any module depends on an adapter.
 | `InMemoryOutbox`                | `IOutbox`                | Azure Service Bus                                                                        | `AddInMemoryAdapters`, Development only | implemented |
 | `InMemoryPrivilegedReadAuditor` | `IPrivilegedReadAuditor` | Append-only audit store (PostgreSQL)                                                     | `AddInMemoryAdapters`, Development only | implemented |
 | `InMemorySecretProvider`        | `ISecretProvider`        | Azure Key Vault                                                                          | `AddInMemoryAdapters`, Development only | implemented |
+| `InMemoryAssetRepository`       | `IAssetRepository`       | Azure Database for PostgreSQL + RLS (DEC-001)                                            | `AddLedgerModule`, Development only     | implemented |
+| `InMemoryAssetLedgerReadModel`  | `IAssetLedgerReadModel`  | PostgreSQL projection (Stage 7 §5)                                                       | `AddLedgerModule`, Development only     | implemented |
+| `AllowAllLedgerAuthorizer`      | `ILedgerAuthorizer`      | C8.2 delegated role model                                                                | `AddLedgerModule`, Development only     | implemented |
 | Local Docker PostgreSQL         | `IDataStore` (future)    | Azure Database for PostgreSQL Flexible Server (DEC-001)                                  | not yet wired                           | planned     |
 
 Rules: standard SQL only (DEC-001); no provider SDK in the domain; swappable by configuration; never

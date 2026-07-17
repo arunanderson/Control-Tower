@@ -4,9 +4,9 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 | Field             | Value                                                                                                  |
 | ----------------- | ------------------------------------------------------------------------------------------------------ |
-| **Current phase** | Phase 1 — Application foundation & tenancy                                                             |
-| **Current epic**  | Platform foundation complete (PR open); Asset Ledger (C1) next                                         |
-| **Current task**  | P1-T01 complete                                                                                        |
+| **Current phase** | Phase 2 — Asset Ledger (C1)                                                                            |
+| **Current epic**  | Asset Ledger complete (PR open); Cost & Value Intelligence (C3) next                                   |
+| **Current task**  | P2-T01 complete                                                                                        |
 | **Overall state** | **Building autonomously via merge trains. No blocking gate.**                                          |
 | **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report; emergent-first |
 | **Last updated**  | 2026-07-17                                                                                             |
@@ -14,13 +14,11 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Completed & merged on `main`
 
-- **E0/E1 rails + CI** (PR #1) — 7 gates.
-- **E2 platform skeleton + tenancy context + NetArchTest boundaries** (PR #3).
-- **E3 event backbone** — append-only store, hash chain + verifier, outbox, privileged-read audit (PR #4).
+- **E0/E1 rails + CI** (PR #1) · **E2 platform skeleton + tenancy + NetArchTest** (PR #3) · **E3 event backbone** (PR #4) · **Platform foundation** — host DI, tenancy middleware, outbox dispatcher, dev adapters (PR #5).
 
 ## In progress (PR open)
 
-- **Platform foundation (P1-T01):** host DI composition (`AddControlTowerPlatform`), per-request `TenantResolutionMiddleware`, `OutboxDispatcher` background service, and **dev-only in-memory adapters behind all four ports** (event store, outbox, privileged-read auditor, secret provider — registered Development-only, DEV-001). **18 tests green** (Platform 10, Architecture 5, Host.Web integration 3); 0 vulnerable packages. Merge Readiness Report on the PR.
+- **Asset Ledger (C1), P2-T01:** `AIAsset` aggregate (one aggregate, all types) · `RegistrationStatus` + `OperationalLifecycle` state machines (guarded) · temporal ownership with **Ownerless/Lapsed** first-class · provider identifier aliases + `ResolutionLink` foundations + **MatchConfidence** roll-up · domain events appended to the immutable stream · `TaxonomyScheme` · tenant-scoped repository + read model via ports (dev in-memory; PostgreSQL later) · registration workflow with an authorization seam · dev-only `/assets` read endpoint. **31 tests green** (Platform 10, Architecture 5, Ledger 13, Host.Web 3); 0 vulnerable packages. Emergent within C1 — no new context/aggregate. Merge Readiness Report on the PR.
 
 ## Blocked (parallel workstream, not the critical path)
 
@@ -34,7 +32,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Test status
 
-- Local & CI: **18 tests green**; build 0/0; 0 vulnerable packages; architecture + adapter boundaries enforced.
+- Local & CI: **31 tests green**; build 0/0; 0 vulnerable packages; module + adapter boundaries enforced.
 
 ## Deployment status
 
@@ -42,4 +40,4 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Next autonomous train
 
-- **Asset Ledger (C1):** `AIAsset` aggregate + `RegistrationStatus`/`OperationalLifecycle` state machines + `OwnershipAssignment` + `TaxonomyScheme` + domain events + a ledger read model + registration workflow — persisted via the `IEventStore`/data-access ports (dev in-memory now, Azure PostgreSQL later). Tenant-independent. Then Economics (C3, incl. Agent ROI read model). Provider integrations remain the parallel tenant workstream.
+- **Priority 3 — Cost & Value Intelligence (C3):** cost observations, cost allocation + Unattributed, usage/adoption facts, value declarations with the six evidence classes, Finance-validation states, ROI calculation projections, **Agent ROI as an emergent read model over `AIAsset`** (no separate module), and portfolio/department/agent economics projections — with tests proving no economic figure is exposed without evidence class, source, methodology, and as-of date. Tenant-independent. Provider integrations remain the parallel tenant workstream.
