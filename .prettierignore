@@ -7,3 +7,5 @@ node_modules/
 dist/
 bin/
 obj/
+package-lock.json
+*.tsbuildinfo

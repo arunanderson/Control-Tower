@@ -17,6 +17,7 @@ public static class LedgerModuleServiceCollectionExtensions
         services.AddSingleton(TaxonomyScheme.Default);
         services.AddSingleton<IAssetRepository, InMemoryAssetRepository>();
         services.AddSingleton<IAssetLedgerReadModel, InMemoryAssetLedgerReadModel>();
+        services.AddSingleton<ICoverageReadModel, InMemoryCoverageReadModel>();
         services.AddSingleton<ILedgerAuthorizer, AllowAllLedgerAuthorizer>();
         services.AddScoped<AssetRegistrationService>();
         return services;
