@@ -4,15 +4,30 @@ on:
   push:
     branches: [main]
 jobs:
-  osv:
+  vulnerable-packages:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: OSV scanner (no-op until manifests exist)
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Scan for vulnerable NuGet packages
         run: |
-          if ls **/package.json **/*.csproj >/dev/null 2>&1; then
-            echo "dependency manifests present — running OSV scanner"
-            docker run --rm -v "$PWD":/src ghcr.io/google/osv-scanner:latest scan --recursive /src || exit 1
+          if [ -f ControlTower.sln ]; then
+            dotnet restore ControlTower.sln
+            dotnet list ControlTower.sln package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+            if grep -q "has the following vulnerable" vuln.txt; then
+              echo "::error::Vulnerable NuGet packages detected"
+              exit 1
+            fi
+            echo "No vulnerable packages."
           else
-            echo "no dependency manifests yet (bootstrap PR adds no runtime deps) — gate reserved"
+            echo "No solution yet (bootstrap adds no runtime deps) — gate reserved."
+          fi
+      - name: Scan npm (web shell) if present
+        run: |
+          if [ -f web/package.json ]; then
+            cd web && npm audit --audit-level=high
+          else
+            echo "No web/package.json yet — npm scan reserved."
           fi

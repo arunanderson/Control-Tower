@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ControlTower.Platform\ControlTower.Platform.csproj" />
+    <ProjectReference Include="..\..\Modules\ControlTower.Modules.Ledger\ControlTower.Modules.Ledger.csproj" />
+    <ProjectReference Include="..\..\Modules\ControlTower.Modules.Governance\ControlTower.Modules.Governance.csproj" />
+    <ProjectReference Include="..\..\Modules\ControlTower.Modules.Economics\ControlTower.Modules.Economics.csproj" />
+    <ProjectReference Include="..\..\Modules\ControlTower.Modules.Providers\ControlTower.Modules.Providers.csproj" />
+    <ProjectReference Include="..\..\Modules\ControlTower.Modules.EnterpriseContext\ControlTower.Modules.EnterpriseContext.csproj" />
+    <ProjectReference Include="..\..\Modules\ControlTower.Modules.Experience\ControlTower.Modules.Experience.csproj" />
+    <ProjectReference Include="..\..\Modules\ControlTower.Modules.Trust\ControlTower.Modules.Trust.csproj" />
+    <ProjectReference Include="..\..\Modules\ControlTower.Modules.Audit\ControlTower.Modules.Audit.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

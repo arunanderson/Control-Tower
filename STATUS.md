@@ -5,47 +5,49 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | Field             | Value                                                                           |
 | ----------------- | ------------------------------------------------------------------------------- |
 | **Current phase** | Phase 0 — Foundations & Gate-1 PoCs                                             |
-| **Current epic**  | E0/E1 rails complete; E6 DB decision recorded; E4 PoCs **blocked**              |
-| **Current task**  | P0-T16 (PoC execution) — BLOCKED on tenant                                      |
-| **Overall state** | **Bootstrap PR open (awaiting merge); PoC execution blocked (awaiting tenant)** |
+| **Current epic**  | E2 platform skeleton (this PR); E3 event backbone is next unblocked             |
+| **Current task**  | P0-T09 complete → P0-T12 (event backbone) next                                  |
+| **Overall state** | **Two PRs open awaiting merge; PoC execution blocked (parallel, not blocking)** |
 | **Last updated**  | 2026-07-16                                                                      |
 | **Updated by**    | Claude Code (build agent)                                                       |
 
 ## Completed work
 
-- Gate-0, DEV-001, Phase-0 plan **approved** by Arun (2026-07-16).
-- **DEV-001 recorded** (approve-with-conditions): Azure production; dev-only substitutes under 4 conditions + no-prod-dependency rule.
-- **DEC-001 recorded**: database engine = Azure Database for PostgreSQL (Flexible Server), Azure SQL fallback; standard-SQL-only discipline keeps it reversible. Ratified on bootstrap PR merge.
-- **Bootstrap rails built (E0+E1)**: root + `docs/build` CLAUDE.md; `.claude/settings.json` deny-rules; full `docs/build` structure + templates + `build-state.yaml` + risk register + dev-substitute registry; PR template; CODEOWNERS; `.gitignore`.
-- **CI gate set (E1)**: format, secret-scan, dependency-scan, protected-paths, task-contract-validation, architecture-gate (placeholder), production-readiness (DEV-001). Validators **pass locally** and **proven to fail on deliberate violations** (see `docs/build/evidence/EVIDENCE-P0-BOOTSTRAP-rails.md`).
-- **Gate-1 PoC harness (P0-T15)** authored + quarantined in `/poc` (never referenced by `/src`).
+- **Bootstrap rails + CI (E0/E1)** — PR #1, CI 7/7 green.
+- **DEV-001** approved-with-conditions; **DEC-001** DB engine = Azure PostgreSQL Flexible Server.
+- **.NET toolchain** installed user-locally (8.0.423); CI uses `setup-dotnet` 8.0.x.
+- **E2 platform skeleton** — PR #2 (stacked): modular monolith (Platform + 8 modules C1–C9 + Host.Web + Host.Worker), **unforgeable tenancy context**, adapter ports (secrets/queue/blob/data), event abstractions, and **NetArchTest module-boundary tests** (R-23 keystone). Build 0/0; **7/7 tests pass**; **no vulnerable packages** (test tooling upgraded). Wired into CI (`build-test`, `architecture-gate`, `dependency-scan`). No live tenant used.
 
 ## Open pull requests
 
-- **PR #1** — Phase 0 bootstrap (rails + CI + DEV-001 decision + DEC-001 + PoC harness). **Awaiting Arun's review/merge (do not auto-merge).**
+- **PR #1** — Phase 0 bootstrap (rails + CI + DEV-001 + DEC-001). Awaiting merge.
+- **PR #2** — Phase 0 E2 platform skeleton (base = PR #1 branch, stacked). Awaiting merge.
 
 ## Failed / blocked work
 
-- **P0-T16 (Gate-1 PoC execution) — BLOCKED.** Needs a provisioned M365 tenant (Agent 365 licence + 4 archetypes) + Entra app registrations + consent. See `BLOCKED.md`. Granting tenant permissions is a human gate.
+- **P0-T16 (Gate-1 PoC execution) — BLOCKED**, and **provider integrations (Phase 2 C4 adapters)** — both need a provisioned M365 tenant + consent. Per direction, this is **one parallel workstream, not the critical path**; all tenant-independent work continues.
 
-## Required Arun actions (in order)
+## Required Arun actions
 
-1. **Review & merge PR #1** (merge is a human gate — the agent will not merge).
-2. **Configure branch protection on `main`** + enable "Require review from Code Owners" + create the `production` GitHub environment with required reviewer (manual; not doable by the agent).
-3. **Provision the Gate-1 PoC tenant** (Agent 365 + 4 archetypes + app registrations + consent) to unblock P0-T16, then have an operator run the `/poc` scripts and append findings.
+1. **Review & merge PR #1**, then **PR #2** (agent will not merge). After PR #1 merges, PR #2 retargets to `main`.
+2. **Branch protection + CODEOWNERS enforcement + `production` environment** (manual GitHub config).
+3. **Provision the Gate-1 PoC tenant** when convenient — unblocks the PoC + provider-integration workstream (not blocking other Phase 0/1 work).
 
 ## Test status
 
-- **CI on PR #1: 7/7 green** (format, secret-scan/gitleaks, dependency-scan/osv, protected-paths, task-contract-validation, architecture-gate, production-readiness). Negative tests confirm gates fail on violations. No product/unit/integration/e2e tests yet (no application code — correct for Phase 0 rails).
+- **Local:** build 0/0; unit 4/4 (tenancy); architecture 3/3 (boundaries); vulnerable packages 0. Negative tests confirm CI gates fail on violations.
+- **CI:** PR #1 7/7 green; PR #2 runs build-test + architecture-gate + dependency-scan (+ the 6 rails gates) on push.
 
 ## Deployment status
 
-- Nothing deployed. No production access. No secrets created or exposed.
+- Nothing deployed. No production access. No secrets created or exposed. Nothing merged.
 
 ## Development-substitute policy (in force, DEV-001 §7)
 
-Azure is production. Dev-only substitutes allowed only when isolated to dev/test, no architectural dependency (ports/adapters; standard SQL only), replaceable before production without architecture change, and clearly marked. Enforced by the `production-readiness` CI gate + (future) architecture-boundary tests + the dev-substitute registry.
+Azure is production. Dev-only substitutes (e.g. local Docker Postgres) allowed only via ports/adapters, standard SQL only, replaceable before production, marked dev-only, and never in a production path. Enforced by the `production-readiness` gate + NetArchTest boundaries + the dev-substitute registry.
 
 ## Next autonomous action
 
-- **Blocked on human gates** (PR #1 merge; branch protection/environments; Gate-1 tenant). After PR #1 merges: generate E2 task contracts (platform skeleton + tenancy context, Azure-targeted, dev-substitute per policy) and E3 (event backbone/outbox/hash-chain skeleton) as their own contract-approved PRs; wire the real NetArchTest architecture gate. Track B/C (Gate-1 PoC execution, Stage 3 re-validation, Stage 5 finalisation) proceeds once the tenant is provisioned.
+- **E3 — Event backbone, outbox & integrity-chain skeleton** (append-only store with update/delete denied, hash-chain + WORM-anchor pattern behind the `IEvidenceStore` port, chain verifier, privileged-read audit hook) — tenant-independent; proceed as PR #3.
+- Then the **React/TS UI shell** under `/web` (Vite + vitest; buildable/testable with the installed node) and **API contracts** (OpenAPI) — both tenant-independent.
+- **Provider integrations + Gate-1 PoC execution** wait on the tenant (parallel workstream).
