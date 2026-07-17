@@ -1,0 +1,12 @@
+name: protected-paths
+on:
+  pull_request:
+jobs:
+  protected-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fail if blueprint/approvals modified
+        run: bash scripts/ci/validate_protected_paths.sh "origin/${{ github.base_ref }}"

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "deny": [
+      "Write(docs/blueprint/**)",
+      "Edit(docs/blueprint/**)",
+      "Write(docs/build/approvals/**)",
+      "Edit(docs/build/approvals/**)"
+    ]
+  }
+}

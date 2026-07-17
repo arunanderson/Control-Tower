@@ -1,0 +1,9 @@
+# Frozen / human-owned — the build agent must never reformat these.
+docs/blueprint/
+docs/automation/
+
+# Vendored / generated
+node_modules/
+dist/
+bin/
+obj/

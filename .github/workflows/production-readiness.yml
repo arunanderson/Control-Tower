@@ -1,0 +1,12 @@
+name: production-readiness
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  dev-substitute-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No dev-only substitute in production paths (DEV-001)
+        run: bash scripts/ci/check_production_readiness.sh

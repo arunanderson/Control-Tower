@@ -1,0 +1,16 @@
+name: format
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Markdown/YAML/JSON format check
+        run: npx --yes prettier@3 --check "**/*.{md,yml,yaml,json}"
+      - name: Pipeline self-test (must be able to fail)
+        run: |
+          echo "self-test: proving the runner executes shell steps"
+          test -f CLAUDE.md
