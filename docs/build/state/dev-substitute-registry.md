@@ -15,6 +15,7 @@ fail if the kernel or any module depends on an adapter.
 | `InMemoryAssetLedgerReadModel`  | `IAssetLedgerReadModel`  | PostgreSQL projection (Stage 7 §5)                                                       | `AddLedgerModule`, Development only     | implemented |
 | `AllowAllLedgerAuthorizer`      | `ILedgerAuthorizer`      | C8.2 delegated role model                                                                | `AddLedgerModule`, Development only     | implemented |
 | `InMemoryEconomicsStore`        | `IEconomicsStore`        | Azure Database for PostgreSQL (DEC-001)                                                  | `AddEconomicsModule`, Development only  | implemented |
+| `InMemoryGovernanceStore`       | `IGovernanceStore`       | Azure Database for PostgreSQL (DEC-001)                                                  | `AddGovernanceModule`, Development only | implemented |
 | Local Docker PostgreSQL         | `IDataStore` (future)    | Azure Database for PostgreSQL Flexible Server (DEC-001)                                  | not yet wired                           | planned     |
 
 Rules: standard SQL only (DEC-001); no provider SDK in the domain; swappable by configuration; never

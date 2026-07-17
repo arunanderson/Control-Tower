@@ -6,9 +6,9 @@ blueprint:
 project:
   name: Enterprise AI Control Tower
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
-current_phase: PHASE-3 # Cost & Value Intelligence; Asset Ledger complete on main
-current_epic: EPIC-3-1 # Cost & Value Intelligence (C3)
-current_task: P3-T01 # complete
+current_phase: PHASE-4 # Governance Orchestration; Economics complete on main
+current_epic: EPIC-4-1 # Governance Orchestration (C2)
+current_task: P4-T01 # complete
 status: in_progress
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
@@ -50,6 +50,7 @@ epics:
     }
   - { id: EPIC-2-1, title: "AI Asset Ledger (C1)", status: complete }
   - { id: EPIC-3-1, title: "Cost & Value Intelligence (C3)", status: complete }
+  - { id: EPIC-4-1, title: "Governance Orchestration (C2)", status: complete }
   - { id: EPIC-0-4, title: Gate-1 PoC execution (E4), status: blocked } # parallel, not critical path
 tasks:
   - { id: P0-BOOTSTRAP, title: Rails + CI, status: complete }
@@ -78,6 +79,11 @@ tasks:
       title: "Cost & Value Intelligence (C3) — one economics model, many ROI read models",
       status: complete,
     }
+  - {
+      id: P4-T01,
+      title: "Governance Orchestration (C2) — cases, tiered approvals, waivers, retirement, reuse, debt",
+      status: complete,
+    }
   - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked }
 decisions:
   - { id: DEC-001, title: Database engine (Azure PostgreSQL), status: recorded }
@@ -89,14 +95,15 @@ merged_prs:
   - { number: 4, title: E3 event backbone }
   - { number: 5, title: Platform foundation }
   - { number: 6, title: Asset Ledger (C1) }
+  - { number: 7, title: Cost & Value Intelligence (C3) }
 open_prs:
   - {
-      branch: phase-3/economics,
-      title: "Cost & Value Intelligence (C3)",
+      branch: phase-4/governance,
+      title: "Governance Orchestration (C2)",
       state: open,
     }
 next_trains:
-  - "Governance (C2, Priority 4): intake, risk-based approvals, reviews, exceptions, recertification, retirement, reuse/extend/compose/build-new decision recording, native-control orchestration where supported"
+  - "Experience layer (C7, Priority 5): expose Ledger + Economics + Governance read models through Portfolio, Economics, Governance, Trust, Administration experiences (read-model-only, I4)"
   - "tenant workstream (parallel): Gate-1 PoCs, provider adapters"
-test_summary: "47 tests green (Platform 10, Architecture 5, Ledger 13, Economics 16, Host.Web 3); 0 vulnerable packages"
-last_updated_by: P3-T01
+test_summary: "64 tests green (Platform 10, Ledger 13, Governance 17, Economics 16, Architecture 5, Host.Web 3); 0 vulnerable packages"
+last_updated_by: P4-T01
