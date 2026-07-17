@@ -90,6 +90,11 @@ tasks:
       title: "Experience Layer (C7) — read-model-only API + React/TS SPA (five areas)",
       status: complete,
     }
+  - {
+      id: P6-T01,
+      title: "Provider Integration (C4.5) — provider framework, contracts, registry, harness, CSV provider (Phase A)",
+      status: complete,
+    }
   - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked }
 decisions:
   - { id: DEC-001, title: Database engine (Azure PostgreSQL), status: recorded }
@@ -103,9 +108,14 @@ merged_prs:
   - { number: 6, title: Asset Ledger (C1) }
   - { number: 7, title: Cost & Value Intelligence (C3) }
   - { number: 8, title: Governance Orchestration (C2) }
+  - { number: 9, title: Experience Layer (C7) }
 open_prs:
-  - { branch: phase-5/experience, title: "Experience Layer (C7)", state: open }
+  - {
+      branch: phase-6/provider-framework,
+      title: "Provider Integration (C4.5) — provider framework (Phase A)",
+      state: open,
+    }
 next_trains:
-  - "Provider Integration (C4, Priority 6): the approved provider abstraction/plug-in contract (C4.5) only — provider manifest + contract + registry, tenant-independent. Microsoft provider adapters + Gate-1 PoC execution wait for a provisioned tenant (parallel workstream)."
-test_summary: "80 backend tests green (Platform 10, Ledger 13, Governance 17, Economics 16, Architecture 5, Host.Web 19) + 5 SPA (vitest); 0 vulnerable production packages"
-last_updated_by: P5-T01
+  - "TENANT GATE (Phase B): execute Gate-1 PoC-1/2/3 and implement the Microsoft Graph/Copilot/Entra/PPAC providers behind the existing provider contracts — requires a provisioned M365 tenant, licences, admin consent, and sample archetypes (see docs/build/plans/PROVIDER-INTEGRATION-READINESS.md). Human gate: awaiting Arun."
+test_summary: "93 backend tests green (Platform 10, Ledger 13, Governance 17, Economics 16, Providers 13, Architecture 5, Host.Web 19) + 5 SPA (vitest); 0 vulnerable production packages"
+last_updated_by: P6-T01

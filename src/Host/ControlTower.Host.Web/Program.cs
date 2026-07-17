@@ -3,6 +3,7 @@ using ControlTower.Host.Web;
 using ControlTower.Modules.Economics;
 using ControlTower.Modules.Governance;
 using ControlTower.Modules.Ledger;
+using ControlTower.Modules.Providers;
 using ControlTower.Platform.DependencyInjection;
 using ControlTower.Platform.Tenancy;
 
@@ -19,6 +20,7 @@ if (experienceApiEnabled)
     builder.Services.AddLedgerModule();
     builder.Services.AddEconomicsModule();
     builder.Services.AddGovernanceModule();
+    builder.Services.AddProviderFramework();
 }
 
 var app = builder.Build();
