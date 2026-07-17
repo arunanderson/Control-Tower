@@ -6,27 +6,31 @@ blueprint:
 project:
   name: Enterprise AI Control Tower
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
-current_phase: PHASE-0
-current_epic: EPIC-0-3 # event backbone (merged); UI shell + API contracts next
-current_task: P0-T12 # complete
+current_phase: PHASE-1 # platform foundation; Phase-0 rails/skeleton/events complete on main
+current_epic: EPIC-1-1 # application foundation & tenancy
+current_task: P1-T01 # complete
 status: in_progress
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
+emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
 blocked:
   is_blocked: false
-  reference: null # PoC execution + provider integrations blocked on tenant — parallel workstream
+  reference: null # provider integrations + Gate-1 PoCs blocked on tenant — parallel workstream
 gates:
   gate_0_venture_decision: approved
   phase_0_plan: approved
   dev_001_supabase: approved-with-conditions
-  gate_1_poc_tenant: pending # blocks PoC execution (E4) + provider integrations only
+  gate_1_poc_tenant: pending # blocks provider integrations + PoC execution only
   database_engine_decision: recorded
 toolchain:
   dotnet: "8.0.423 (user-local ~/.dotnet; CI setup-dotnet 8.0.x)"
   node: "24.10.0"
 phases:
-  - id: PHASE-0
-    title: Foundations & Gate-1 PoCs
-    status: in_progress
+  - { id: PHASE-0, title: Foundations & Gate-1 PoCs, status: mostly-complete } # rails/skeleton/events done; PoCs blocked on tenant
+  - {
+      id: PHASE-1,
+      title: Application foundation & tenancy,
+      status: in_progress,
+    }
 epics:
   - { id: EPIC-0-1, title: Build-control rails (E0), status: complete }
   - {
@@ -40,9 +44,9 @@ epics:
       status: complete,
     }
   - {
-      id: EPIC-0-6,
-      title: DB-engine decision & RLS spike (E6),
-      status: partial,
+      id: EPIC-1-1,
+      title: "Application foundation (DI, tenancy middleware, worker, dev adapters)",
+      status: complete,
     }
   - { id: EPIC-0-4, title: Gate-1 PoC execution (E4), status: blocked } # parallel, not critical path
 tasks:
@@ -57,23 +61,29 @@ tasks:
       title: Event backbone + outbox + hash-chain + audit hook,
       status: complete,
     }
-  - { id: P0-T15, title: Gate-1 PoC harness, status: complete }
+  - {
+      id: P1-T01,
+      title: Host composition + tenancy middleware + dispatcher + dev adapters,
+      status: complete,
+    }
   - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked }
 decisions:
   - { id: DEC-001, title: Database engine (Azure PostgreSQL), status: recorded }
 deviations:
   - { id: DEV-001, title: Supabase backend, status: approved-with-conditions }
 merged_prs:
-  - { number: 1, title: Phase 0 bootstrap (rails + CI + DEV-001 + DEC-001) }
-  - { number: 3, title: Phase 0 E2 platform skeleton }
+  - { number: 1, title: Phase 0 bootstrap }
+  - { number: 3, title: E2 platform skeleton }
+  - { number: 4, title: E3 event backbone }
 open_prs:
   - {
-      branch: phase-0/e3-event-backbone,
-      title: Phase 0 E3 event backbone,
+      branch: phase-1/platform-foundation,
+      title: "Platform foundation (DI, tenancy, worker, adapters)",
       state: open,
     }
 next_trains:
-  - E3 event backbone (this PR)
-  - UI shell (React/TS under /web, Vite + vitest) + API contracts (OpenAPI)
-  - "tenant workstream (parallel): Gate-1 PoC execution, provider adapters"
-last_updated_by: P0-T12
+  - "Asset Ledger (C1): AIAsset aggregate, state machines, ownership, taxonomy, events, read model, registration workflow"
+  - "Economics (C3): cost/value/ROI read models incl. Agent ROI"
+  - "tenant workstream (parallel): Gate-1 PoCs, provider adapters"
+test_summary: "18 tests green (Platform 10, Architecture 5, Host.Web integration 3); 0 vulnerable packages"
+last_updated_by: P1-T01

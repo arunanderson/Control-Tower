@@ -10,6 +10,7 @@
     <ProjectReference Include="..\..\Modules\ControlTower.Modules.Experience\ControlTower.Modules.Experience.csproj" />
     <ProjectReference Include="..\..\Modules\ControlTower.Modules.Trust\ControlTower.Modules.Trust.csproj" />
     <ProjectReference Include="..\..\Modules\ControlTower.Modules.Audit\ControlTower.Modules.Audit.csproj" />
+    <ProjectReference Include="..\..\Adapters\ControlTower.Adapters.InMemory\ControlTower.Adapters.InMemory.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
