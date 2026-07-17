@@ -2,44 +2,44 @@
 
 _Single source of build truth. Updated by the build agent as part of every task's Document step._
 
-| Field             | Value                                                                                  |
-| ----------------- | -------------------------------------------------------------------------------------- |
-| **Current phase** | Phase 0 — Foundations & Gate-1 PoCs                                                    |
-| **Current epic**  | E3 event backbone (PR open); UI shell + API contracts next                             |
-| **Current task**  | P0-T12 complete                                                                        |
-| **Overall state** | **On main: rails + platform skeleton. E3 in review. Building autonomously.**           |
-| **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report |
-| **Last updated**  | 2026-07-17                                                                             |
-| **Updated by**    | Claude Code (build agent)                                                              |
+| Field             | Value                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| **Current phase** | Phase 1 — Application foundation & tenancy                                                             |
+| **Current epic**  | Platform foundation complete (PR open); Asset Ledger (C1) next                                         |
+| **Current task**  | P1-T01 complete                                                                                        |
+| **Overall state** | **Building autonomously via merge trains. No blocking gate.**                                          |
+| **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report; emergent-first |
+| **Last updated**  | 2026-07-17                                                                                             |
+| **Updated by**    | Claude Code (build agent)                                                                              |
 
-## Completed work (on `main`)
+## Completed & merged on `main`
 
-- **E0/E1 rails + CI** (PR #1, merged) — 7 gates.
-- **E2 platform skeleton + tenancy + architecture tests** (PR #3, merged) — modular monolith, unforgeable tenant context, NetArchTest keystone.
+- **E0/E1 rails + CI** (PR #1) — 7 gates.
+- **E2 platform skeleton + tenancy context + NetArchTest boundaries** (PR #3).
+- **E3 event backbone** — append-only store, hash chain + verifier, outbox, privileged-read audit (PR #4).
 
-## In progress
+## In progress (PR open)
 
-- **E3 event backbone** (PR open): append-only `IEventStore`, `Sha256HashChain` + `HashChainVerifier` (tamper detection), transactional `IOutbox`, privileged-read audit hook (ADR-015.9). Build 0/0; **13 tests pass** (Platform 10 + Architecture 3); tenant-independent. Merge Readiness Report on the PR.
+- **Platform foundation (P1-T01):** host DI composition (`AddControlTowerPlatform`), per-request `TenantResolutionMiddleware`, `OutboxDispatcher` background service, and **dev-only in-memory adapters behind all four ports** (event store, outbox, privileged-read auditor, secret provider — registered Development-only, DEV-001). **18 tests green** (Platform 10, Architecture 5, Host.Web integration 3); 0 vulnerable packages. Merge Readiness Report on the PR.
 
-## Failed / blocked work (parallel workstream, not the critical path)
+## Blocked (parallel workstream, not the critical path)
 
-- **Gate-1 PoC execution (P0-T16)** and **Phase-2 provider adapters** — need a provisioned M365 tenant + consent. Building everything else meanwhile.
+- **Gate-1 PoC execution** + **Phase-2 provider adapters** — need a provisioned M365 tenant + consent.
 
 ## Required Arun actions
 
-- **Branch protection + CODEOWNERS enforcement + `production` environment** (manual GitHub config) — recommended before feature volume grows.
-- **Provision the Gate-1 tenant** when convenient (unblocks the parallel PoC/provider workstream).
-- Nothing else blocking — per the merge-train directive, approved tenant-independent trains merge on green + Merge Readiness Report.
+- **Branch protection + CODEOWNERS enforcement + `production` environment** (manual GitHub config) — recommended.
+- **Provision the Gate-1 tenant** when convenient (unblocks the parallel provider/PoC workstream).
+- Otherwise none — tenant-independent trains merge on green + Merge Readiness Report.
 
 ## Test status
 
-- Local: build 0/0; **13/13 tests** (tenancy 4, event backbone 6, architecture 3); 0 vulnerable packages.
-- CI: main green; E3 PR runs the full 8-gate set.
+- Local & CI: **18 tests green**; build 0/0; 0 vulnerable packages; architecture + adapter boundaries enforced.
 
 ## Deployment status
 
-- Nothing deployed. No production access/credentials. No secrets. No frozen-doc changes.
+- Nothing deployed. No production access/credentials/secrets. No frozen-doc changes.
 
-## Next autonomous action
+## Next autonomous train
 
-- Merge E3 on green. Then the **UI shell** (React/TS under `/web`, Vite + vitest — node available) and **OpenAPI API contracts** as the next merge train (tenant-independent). Persistence adapters (Azure PostgreSQL) + the RLS spike follow. Provider integrations + Gate-1 PoCs remain the parallel tenant workstream.
+- **Asset Ledger (C1):** `AIAsset` aggregate + `RegistrationStatus`/`OperationalLifecycle` state machines + `OwnershipAssignment` + `TaxonomyScheme` + domain events + a ledger read model + registration workflow — persisted via the `IEventStore`/data-access ports (dev in-memory now, Azure PostgreSQL later). Tenant-independent. Then Economics (C3, incl. Agent ROI read model). Provider integrations remain the parallel tenant workstream.
