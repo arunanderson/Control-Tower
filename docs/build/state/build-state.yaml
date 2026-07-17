@@ -6,10 +6,10 @@ blueprint:
 project:
   name: Enterprise AI Control Tower
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
-current_phase: PHASE-5 # Experience Layer; Governance complete on main
-current_epic: EPIC-5-1 # Experience Layer (C7)
-current_task: P5-T01 # complete
-status: in_progress
+current_phase: PHASE-6 # Provider Integration (C4); Phase A complete on main
+current_epic: EPIC-6-1 # Provider framework (C4.5) — Phase A
+current_task: P6-T01 # complete
+status: awaiting_tenant_gate # Phase B (Microsoft providers + Gate-1 PoCs) is a hard human gate
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
 blocked:
@@ -52,6 +52,11 @@ epics:
   - { id: EPIC-3-1, title: "Cost & Value Intelligence (C3)", status: complete }
   - { id: EPIC-4-1, title: "Governance Orchestration (C2)", status: complete }
   - { id: EPIC-5-1, title: "Experience Layer (C7)", status: complete }
+  - {
+      id: EPIC-6-1,
+      title: "Provider framework (C4.5) — Phase A, tenant-independent",
+      status: complete,
+    }
   - { id: EPIC-0-4, title: Gate-1 PoC execution (E4), status: blocked } # parallel, not critical path
 tasks:
   - { id: P0-BOOTSTRAP, title: Rails + CI, status: complete }
