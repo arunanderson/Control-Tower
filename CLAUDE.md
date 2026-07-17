@@ -59,12 +59,19 @@ build runs. The **what** is the frozen blueprint in `/docs/blueprint`.
   **twice** on the same task; a contract is ambiguous or conflicts with the blueprint; forbidden
   files must be touched; a previously-green gate regresses; or a human gate is reached.
 
-## 7. Human gates (never automated)
+## 7. Merge policy & human gates
 
-Merging PRs · granting Microsoft tenant permissions/consent · executing migrations against shared
-or production environments · creating/exposing production secrets · production deployment · changing
-frozen architecture · approving deviations · signing phase gates. **Never** commit secrets, force-push
-`main`, or merge your own PR.
+**Merge trains (Arun, 2026-07-17):** group related tenant-independent work into reviewable merge
+trains; avoid large monolithic PRs and unnecessary stacked PRs. **Every PR ends with a Merge
+Readiness Report** (blueprint alignment · ADR compliance · tests passed · CI status · security status ·
+architecture status · technical debt introduced · known risks · deviations requested · merge
+recommendation). The agent may merge a PR **only when** it is tenant-independent, all CI gates are
+green, and its Merge Readiness Report recommends merge.
+
+**Stop for a human — never automated:** phase-gate sign-offs and any new approval; architecture
+deviations; production credentials/secrets; migrations against shared/production environments;
+tenant-dependent work and tenant consent; production deployment; any change to frozen
+`/docs/blueprint`. **Never** commit secrets or force-push `main`.
 
 ## 8. Pointers
 

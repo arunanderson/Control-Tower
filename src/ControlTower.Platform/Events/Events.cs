@@ -7,15 +7,9 @@ public interface IDomainEvent
     DateTimeOffset OccurredAt { get; }
 }
 
-/// <summary>Append-only event sink. There is deliberately no update or delete (ADR-015).</summary>
-public interface IEventAppender
-{
-    /// <summary>Appends an event and returns its monotonically increasing stream position.</summary>
-    ValueTask<long> AppendAsync(IDomainEvent @event, CancellationToken ct = default);
-}
-
 /// <summary>Hash-chain integrity over the event stream (ADR-021). Anchored to WORM storage periodically.</summary>
 public interface IHashChain
 {
+    /// <summary>Deterministic next hash from the previous hash and this record's canonical payload.</summary>
     string ComputeNext(string previousHash, ReadOnlyMemory<byte> payload);
 }

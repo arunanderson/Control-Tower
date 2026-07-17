@@ -2,52 +2,44 @@
 
 _Single source of build truth. Updated by the build agent as part of every task's Document step._
 
-| Field             | Value                                                                           |
-| ----------------- | ------------------------------------------------------------------------------- |
-| **Current phase** | Phase 0 — Foundations & Gate-1 PoCs                                             |
-| **Current epic**  | E2 platform skeleton (this PR); E3 event backbone is next unblocked             |
-| **Current task**  | P0-T09 complete → P0-T12 (event backbone) next                                  |
-| **Overall state** | **Two PRs open awaiting merge; PoC execution blocked (parallel, not blocking)** |
-| **Last updated**  | 2026-07-16                                                                      |
-| **Updated by**    | Claude Code (build agent)                                                       |
+| Field             | Value                                                                                  |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| **Current phase** | Phase 0 — Foundations & Gate-1 PoCs                                                    |
+| **Current epic**  | E3 event backbone (PR open); UI shell + API contracts next                             |
+| **Current task**  | P0-T12 complete                                                                        |
+| **Overall state** | **On main: rails + platform skeleton. E3 in review. Building autonomously.**           |
+| **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report |
+| **Last updated**  | 2026-07-17                                                                             |
+| **Updated by**    | Claude Code (build agent)                                                              |
 
-## Completed work
+## Completed work (on `main`)
 
-- **Bootstrap rails + CI (E0/E1)** — PR #1, CI 7/7 green.
-- **DEV-001** approved-with-conditions; **DEC-001** DB engine = Azure PostgreSQL Flexible Server.
-- **.NET toolchain** installed user-locally (8.0.423); CI uses `setup-dotnet` 8.0.x.
-- **E2 platform skeleton** — PR #2 (stacked): modular monolith (Platform + 8 modules C1–C9 + Host.Web + Host.Worker), **unforgeable tenancy context**, adapter ports (secrets/queue/blob/data), event abstractions, and **NetArchTest module-boundary tests** (R-23 keystone). Build 0/0; **7/7 tests pass**; **no vulnerable packages** (test tooling upgraded). Wired into CI (`build-test`, `architecture-gate`, `dependency-scan`). No live tenant used.
+- **E0/E1 rails + CI** (PR #1, merged) — 7 gates.
+- **E2 platform skeleton + tenancy + architecture tests** (PR #3, merged) — modular monolith, unforgeable tenant context, NetArchTest keystone.
 
-## Open pull requests
+## In progress
 
-- **PR #1** — Phase 0 bootstrap (rails + CI + DEV-001 + DEC-001). Awaiting merge.
-- **PR #2** — Phase 0 E2 platform skeleton (base = PR #1 branch, stacked). Awaiting merge.
+- **E3 event backbone** (PR open): append-only `IEventStore`, `Sha256HashChain` + `HashChainVerifier` (tamper detection), transactional `IOutbox`, privileged-read audit hook (ADR-015.9). Build 0/0; **13 tests pass** (Platform 10 + Architecture 3); tenant-independent. Merge Readiness Report on the PR.
 
-## Failed / blocked work
+## Failed / blocked work (parallel workstream, not the critical path)
 
-- **P0-T16 (Gate-1 PoC execution) — BLOCKED**, and **provider integrations (Phase 2 C4 adapters)** — both need a provisioned M365 tenant + consent. Per direction, this is **one parallel workstream, not the critical path**; all tenant-independent work continues.
+- **Gate-1 PoC execution (P0-T16)** and **Phase-2 provider adapters** — need a provisioned M365 tenant + consent. Building everything else meanwhile.
 
 ## Required Arun actions
 
-1. **Review & merge PR #1**, then **PR #2** (agent will not merge). After PR #1 merges, PR #2 retargets to `main`.
-2. **Branch protection + CODEOWNERS enforcement + `production` environment** (manual GitHub config).
-3. **Provision the Gate-1 PoC tenant** when convenient — unblocks the PoC + provider-integration workstream (not blocking other Phase 0/1 work).
+- **Branch protection + CODEOWNERS enforcement + `production` environment** (manual GitHub config) — recommended before feature volume grows.
+- **Provision the Gate-1 tenant** when convenient (unblocks the parallel PoC/provider workstream).
+- Nothing else blocking — per the merge-train directive, approved tenant-independent trains merge on green + Merge Readiness Report.
 
 ## Test status
 
-- **Local:** build 0/0; unit 4/4 (tenancy); architecture 3/3 (boundaries); vulnerable packages 0. Negative tests confirm CI gates fail on violations.
-- **CI:** PR #1 7/7 green; PR #2 runs build-test + architecture-gate + dependency-scan (+ the 6 rails gates) on push.
+- Local: build 0/0; **13/13 tests** (tenancy 4, event backbone 6, architecture 3); 0 vulnerable packages.
+- CI: main green; E3 PR runs the full 8-gate set.
 
 ## Deployment status
 
-- Nothing deployed. No production access. No secrets created or exposed. Nothing merged.
-
-## Development-substitute policy (in force, DEV-001 §7)
-
-Azure is production. Dev-only substitutes (e.g. local Docker Postgres) allowed only via ports/adapters, standard SQL only, replaceable before production, marked dev-only, and never in a production path. Enforced by the `production-readiness` gate + NetArchTest boundaries + the dev-substitute registry.
+- Nothing deployed. No production access/credentials. No secrets. No frozen-doc changes.
 
 ## Next autonomous action
 
-- **E3 — Event backbone, outbox & integrity-chain skeleton** (append-only store with update/delete denied, hash-chain + WORM-anchor pattern behind the `IEvidenceStore` port, chain verifier, privileged-read audit hook) — tenant-independent; proceed as PR #3.
-- Then the **React/TS UI shell** under `/web` (Vite + vitest; buildable/testable with the installed node) and **API contracts** (OpenAPI) — both tenant-independent.
-- **Provider integrations + Gate-1 PoC execution** wait on the tenant (parallel workstream).
+- Merge E3 on green. Then the **UI shell** (React/TS under `/web`, Vite + vitest — node available) and **OpenAPI API contracts** as the next merge train (tenant-independent). Persistence adapters (Azure PostgreSQL) + the RLS spike follow. Provider integrations + Gate-1 PoCs remain the parallel tenant workstream.
