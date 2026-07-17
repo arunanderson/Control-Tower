@@ -12,12 +12,13 @@
 appsettings.*.local.json
 **/secrets/**
 
-# Build output (future .NET / web)
+# Build output (.NET / web)
 bin/
 obj/
 node_modules/
 dist/
 *.user
+*.tsbuildinfo
 
 # OS
 .DS_Store

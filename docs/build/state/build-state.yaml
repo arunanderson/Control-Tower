@@ -6,9 +6,9 @@ blueprint:
 project:
   name: Enterprise AI Control Tower
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
-current_phase: PHASE-4 # Governance Orchestration; Economics complete on main
-current_epic: EPIC-4-1 # Governance Orchestration (C2)
-current_task: P4-T01 # complete
+current_phase: PHASE-5 # Experience Layer; Governance complete on main
+current_epic: EPIC-5-1 # Experience Layer (C7)
+current_task: P5-T01 # complete
 status: in_progress
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
@@ -51,6 +51,7 @@ epics:
   - { id: EPIC-2-1, title: "AI Asset Ledger (C1)", status: complete }
   - { id: EPIC-3-1, title: "Cost & Value Intelligence (C3)", status: complete }
   - { id: EPIC-4-1, title: "Governance Orchestration (C2)", status: complete }
+  - { id: EPIC-5-1, title: "Experience Layer (C7)", status: complete }
   - { id: EPIC-0-4, title: Gate-1 PoC execution (E4), status: blocked } # parallel, not critical path
 tasks:
   - { id: P0-BOOTSTRAP, title: Rails + CI, status: complete }
@@ -84,6 +85,11 @@ tasks:
       title: "Governance Orchestration (C2) — cases, tiered approvals, waivers, retirement, reuse, debt",
       status: complete,
     }
+  - {
+      id: P5-T01,
+      title: "Experience Layer (C7) — read-model-only API + React/TS SPA (five areas)",
+      status: complete,
+    }
   - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked }
 decisions:
   - { id: DEC-001, title: Database engine (Azure PostgreSQL), status: recorded }
@@ -96,14 +102,10 @@ merged_prs:
   - { number: 5, title: Platform foundation }
   - { number: 6, title: Asset Ledger (C1) }
   - { number: 7, title: Cost & Value Intelligence (C3) }
+  - { number: 8, title: Governance Orchestration (C2) }
 open_prs:
-  - {
-      branch: phase-4/governance,
-      title: "Governance Orchestration (C2)",
-      state: open,
-    }
+  - { branch: phase-5/experience, title: "Experience Layer (C7)", state: open }
 next_trains:
-  - "Experience layer (C7, Priority 5): expose Ledger + Economics + Governance read models through Portfolio, Economics, Governance, Trust, Administration experiences (read-model-only, I4)"
-  - "tenant workstream (parallel): Gate-1 PoCs, provider adapters"
-test_summary: "64 tests green (Platform 10, Ledger 13, Governance 17, Economics 16, Architecture 5, Host.Web 3); 0 vulnerable packages"
-last_updated_by: P4-T01
+  - "Provider Integration (C4, Priority 6): the approved provider abstraction/plug-in contract (C4.5) only — provider manifest + contract + registry, tenant-independent. Microsoft provider adapters + Gate-1 PoC execution wait for a provisioned tenant (parallel workstream)."
+test_summary: "80 backend tests green (Platform 10, Ledger 13, Governance 17, Economics 16, Architecture 5, Host.Web 19) + 5 SPA (vitest); 0 vulnerable production packages"
+last_updated_by: P5-T01

@@ -24,10 +24,12 @@ jobs:
           else
             echo "No solution yet (bootstrap adds no runtime deps) — gate reserved."
           fi
-      - name: Scan npm (web shell) if present
+      - name: Scan npm production deps (web) if present
         run: |
           if [ -f web/package.json ]; then
-            cd web && npm audit --audit-level=high
+            # Audit the shipped (production) dependency graph only. Dev/build tooling (vite/vitest)
+            # is not in the SPA artifact and is excluded to keep the gate about what actually ships.
+            cd web && npm audit --omit=dev --audit-level=high
           else
             echo "No web/package.json yet — npm scan reserved."
           fi
