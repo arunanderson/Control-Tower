@@ -6,6 +6,7 @@ import type {
   GovernanceCaseView,
   GovernanceDebtView,
   MergeCaseView,
+  PrivilegedAccessView,
   RoiView,
 } from "./types";
 
@@ -21,6 +22,7 @@ export interface ControlTowerApi {
   getGovernanceCases(): Promise<GovernanceCaseView[]>;
   getGovernanceDebt(): Promise<GovernanceDebtView[]>;
   getCoverage(): Promise<CoverageView>;
+  getPrivilegedAccess(): Promise<PrivilegedAccessView[]>;
   getMergeCases(): Promise<MergeCaseView[]>;
   getAssetResolution(id: string): Promise<AssetResolutionView | null>;
   // Operator actions — commands routed to the C1 resolution service (event-driven, auditable).
@@ -62,6 +64,21 @@ export class HttpControlTowerApi implements ControlTowerApi {
   getGovernanceDebt = () =>
     this.get<GovernanceDebtView[]>("/api/governance/debt");
   getCoverage = () => this.get<CoverageView>("/api/trust/coverage");
+  getPrivilegedAccess = async () => {
+    const response = await fetch(
+      `${this.baseUrl}/api/trust/privileged-access`,
+      {
+        headers: {
+          "X-Tenant-Id": this.tenantId,
+          "X-Actor": "development-user",
+          "X-Purpose": "Review privileged access history",
+        },
+      },
+    );
+    if (!response.ok)
+      throw new Error(`privileged access failed: ${response.status}`);
+    return (await response.json()) as PrivilegedAccessView[];
+  };
   getMergeCases = () =>
     this.get<MergeCaseView[]>("/api/resolution/merge-cases");
   getAssetResolution = async (id: string) => {

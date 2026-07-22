@@ -94,6 +94,15 @@ export interface ProviderSurfaceCoverageView {
   suppressed: number;
 }
 
+export interface PrivilegedAccessView {
+  accessId: string;
+  actor: string;
+  purpose: string;
+  resource: string;
+  occurredAt: string;
+  correlationId: string;
+}
+
 // Resolution & Merge Workbench read models (I4). Display only — no calculation, no domain objects.
 export interface IdentifierView {
   system: string;

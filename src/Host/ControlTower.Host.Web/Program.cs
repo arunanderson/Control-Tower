@@ -1,6 +1,7 @@
 using ControlTower.Adapters.InMemory;
 using ControlTower.Host.Web;
 using ControlTower.Modules.Economics;
+using ControlTower.Modules.Audit;
 using ControlTower.Modules.Governance;
 using ControlTower.Modules.Ledger;
 using ControlTower.Modules.Providers;
@@ -21,6 +22,7 @@ if (experienceApiEnabled)
     builder.Services.AddEconomicsModule();
     builder.Services.AddGovernanceModule();
     builder.Services.AddProviderFramework();
+    builder.Services.AddAuditModule();
 }
 
 var app = builder.Build();
