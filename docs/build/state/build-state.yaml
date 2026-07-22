@@ -6,10 +6,10 @@ blueprint:
 project:
   name: Enterprise AI Control Tower
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
-current_phase: PHASE-6 # Provider Integration (C4); Phase A complete on main
-current_epic: EPIC-6-1 # Provider framework (C4.5) — Phase A
-current_task: P6-T07 # complete
-status: in_progress # tenant-independent C4 sweep job-to-worker execution complete; Phase B remains gated
+current_phase: PHASE-5 # Enterprise readiness in existing C3/C7 capabilities
+current_epic: EPIC-5-2 # Reporting period reproducibility and enterprise controls
+current_task: P5-T02 # complete
+status: in_progress # immutable reporting snapshots complete; enterprise-readiness train continues
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
 blocked:
@@ -52,6 +52,11 @@ epics:
   - { id: EPIC-3-1, title: "Cost & Value Intelligence (C3)", status: complete }
   - { id: EPIC-4-1, title: "Governance Orchestration (C2)", status: complete }
   - { id: EPIC-5-1, title: "Experience Layer (C7)", status: complete }
+  - {
+      id: EPIC-5-2,
+      title: "Enterprise readiness controls in existing bounded contexts",
+      status: in_progress,
+    }
   - {
       id: EPIC-6-1,
       title: "Provider framework (C4.5) — Phase A, tenant-independent",
@@ -130,6 +135,11 @@ tasks:
       title: "C4 provider sweep jobs — secret-free event/outbox request + idempotent worker execution",
       status: complete,
     }
+  - {
+      id: P5-T02,
+      title: "C3 reporting-period snapshot freeze and immutable restatement",
+      status: complete,
+    }
   - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked }
 decisions:
   - { id: DEC-001, title: Database engine (Azure PostgreSQL), status: recorded }
@@ -153,9 +163,10 @@ merged_prs:
   - { number: 13, title: Resolution & Merge Workbench (C7) }
   - { number: 14, title: Honest provider coverage and freshness (C1.6) }
   - { number: 15, title: Privileged-read audit and Trust log (C9/C7) }
+  - { number: 16, title: Provider sweep job and worker execution (C4) }
 open_prs: []
 next_trains:
   - "Next tenant-independent capability from the implementation handoff package: enterprise-readiness foundations (legal hold, export/deletion, reporting-period snapshot, retention) that do not require production credentials. Decision Intelligence (C6) is intentionally vacant (ADR-010). Continue until a genuine human gate."
   - "TENANT GATE (Phase B): execute Gate-1 PoC-1/2/3 and implement the Microsoft Graph/Copilot/Entra/PPAC providers behind the existing provider contracts, and finalize the PoC-gated confidence rule table + alias types (see docs/build/plans/PROVIDER-INTEGRATION-READINESS.md). Human gate; Microsoft dev-sandbox provisioning currently unavailable (external dependency)."
-test_summary: "126 backend tests green (Platform 10, Ledger 27, Governance 17, Economics 16, Providers 24, Architecture 5, Host.Web 27) + 10 SPA (vitest); 0 vulnerable production packages"
-last_updated_by: P6-T07
+test_summary: "132 backend tests green (Platform 10, Ledger 27, Governance 17, Economics 20, Providers 24, Architecture 5, Host.Web 29) + 10 SPA (vitest); 0 vulnerable production packages"
+last_updated_by: P5-T02

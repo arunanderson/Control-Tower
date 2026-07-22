@@ -17,6 +17,7 @@ public static class EconomicsModuleServiceCollectionExtensions
         services.AddSingleton<IEconomicsStore, InMemoryEconomicsStore>();
         services.AddScoped<EconomicsIngestionService>();
         services.AddScoped<EconomicsProjectionService>();
+        services.AddScoped<ReportingSnapshotService>();
         return services;
     }
 }

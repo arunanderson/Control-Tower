@@ -36,5 +36,19 @@ public sealed record ValueRevisedEvent : EconomicsEvent
 public sealed record ReportingPeriodFrozen : EconomicsEvent
 {
     public required Guid PeriodId { get; init; }
+    public required Guid SnapshotId { get; init; }
+    public required int Version { get; init; }
     public required string InputBasisHash { get; init; }
+    public required string SignedBy { get; init; }
+}
+
+public sealed record ReportingPeriodRestated : EconomicsEvent
+{
+    public required Guid PeriodId { get; init; }
+    public required Guid SnapshotId { get; init; }
+    public required int Version { get; init; }
+    public required Guid SupersedesSnapshotId { get; init; }
+    public required string InputBasisHash { get; init; }
+    public required string SignedBy { get; init; }
+    public required string Reason { get; init; }
 }

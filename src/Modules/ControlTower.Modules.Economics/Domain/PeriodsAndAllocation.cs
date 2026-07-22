@@ -32,6 +32,7 @@ public sealed class AllocationRule
 public enum ReportingPeriodState
 {
     Open,
+    Closing,
     Frozen,
     Restated,
 }
@@ -54,18 +55,40 @@ public sealed class ReportingPeriod
     public DateTimeOffset Start { get; }
     public DateTimeOffset End { get; }
     public ReportingPeriodState State { get; private set; }
+    public DateTimeOffset? FrozenAt { get; private set; }
+    public string? FrozenBy { get; private set; }
 
-    public void Freeze()
+    public void BeginClosing()
     {
-        if (State != ReportingPeriodState.Open) throw new EconomicsException("Only an open period can be frozen.");
+        if (State != ReportingPeriodState.Open) throw new EconomicsException("Only an open period can begin closing.");
+        State = ReportingPeriodState.Closing;
+    }
+
+    public void Freeze(DateTimeOffset frozenAt, string frozenBy)
+    {
+        if (State != ReportingPeriodState.Closing) throw new EconomicsException("Only a closing period can be frozen.");
+        if (string.IsNullOrWhiteSpace(frozenBy)) throw new EconomicsException("A snapshot signer is required.");
         State = ReportingPeriodState.Frozen;
+        FrozenAt = frozenAt;
+        FrozenBy = frozenBy;
     }
 
     public void Restate()
     {
-        if (State != ReportingPeriodState.Frozen) throw new EconomicsException("Only a frozen period can be restated.");
+        if (State is not (ReportingPeriodState.Frozen or ReportingPeriodState.Restated))
+            throw new EconomicsException("Only a frozen period can be restated.");
         State = ReportingPeriodState.Restated;
     }
+}
+
+/// <summary>The complete pinned basis needed to reproduce a frozen output (Stage 5 E14).</summary>
+public sealed record ReportInputBasis
+{
+    public required DateTimeOffset AsOf { get; init; }
+    public required IReadOnlyList<string> SourceReferences { get; init; }
+    public required IReadOnlyList<string> RuleVersionReferences { get; init; }
+    public required string OrganisationModelVersion { get; init; }
+    public required string ObservationWatermark { get; init; }
 }
 
 /// <summary>An immutable frozen projection output + its input basis (ADR-016) — the reproducibility anchor.</summary>
@@ -74,7 +97,12 @@ public sealed record ReportSnapshot
     public required Guid Id { get; init; }
     public required TenantId Tenant { get; init; }
     public required Guid PeriodId { get; init; }
+    public required int Version { get; init; }
     public required DateTimeOffset FrozenAt { get; init; }
+    public required ReportInputBasis InputBasis { get; init; }
     public required string InputBasisHash { get; init; }
     public required string PayloadJson { get; init; }
+    public required string SignedBy { get; init; }
+    public Guid? SupersedesSnapshotId { get; init; }
+    public string? RestatementReason { get; init; }
 }
