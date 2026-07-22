@@ -8,13 +8,13 @@ project:
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
 current_phase: PHASE-5 # Enterprise readiness in existing C3/C7 capabilities
 current_epic: EPIC-5-2 # Reporting period reproducibility and enterprise controls
-current_task: P5-T03 # complete
-status: in_progress # legal hold and precedence complete; retention engine is next
+current_task: P0-T17 # build-state reconciliation complete
+status: in_progress # development capability trains continue; production readiness is not complete
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
 blocked:
   is_blocked: false
-  reference: null # provider integrations + Gate-1 PoCs blocked on tenant — parallel workstream
+  reference: BLOCKED.md # two parallel human-gated workstreams; tenant-independent work may continue
 gates:
   gate_0_venture_decision: approved
   phase_0_plan: approved
@@ -145,6 +145,11 @@ tasks:
       title: "C9 tenant-scoped legal hold and retention precedence",
       status: complete,
     }
+  - {
+      id: P0-T17,
+      title: "Reconcile build state after enterprise-control merge trains",
+      status: complete,
+    }
   - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked }
 decisions:
   - { id: DEC-001, title: Database engine (Azure PostgreSQL), status: recorded }
@@ -173,9 +178,14 @@ merged_prs:
       number: 17,
       title: Immutable reporting snapshot freeze and restatement (C3/C7),
     }
+  - {
+      number: 18,
+      title: Tenant-scoped legal hold and retention precedence (C9/C7),
+    }
 open_prs: []
 next_trains:
-  - "Next tenant-independent capability from the implementation handoff package: enterprise-readiness foundations (legal hold, export/deletion, reporting-period snapshot, retention) that do not require production credentials. Decision Intelligence (C6) is intentionally vacant (ADR-010). Continue until a genuine human gate."
-  - "TENANT GATE (Phase B): execute Gate-1 PoC-1/2/3 and implement the Microsoft Graph/Copilot/Entra/PPAC providers behind the existing provider contracts, and finalize the PoC-gated confidence rule table + alias types (see docs/build/plans/PROVIDER-INTEGRATION-READINESS.md). Human gate; Microsoft dev-sandbox provisioning currently unavailable (external dependency)."
+  - "P5-T04 retention mechanism: use an authoritative, versioned jurisdiction-policy provider; never accept self-declared floors/ceilings in the tenant retention command. Actual legal values remain human/legal governed."
+  - "TENANT GATE (Phase B): complete Wave 0 permission-catalogue checks, then execute Gate-1 PoC-1/2/3 behind the existing provider contracts. Microsoft tenant actions remain human-only."
+  - "Production readiness remains incomplete: Entra authentication/JIT, privacy Gate 2, export/deletion/erasure, Azure PostgreSQL/RLS, Service Bus, Key Vault, Blob/WORM, IaC, observability, DR and deployment evidence."
 test_summary: "135 backend tests green (Platform 10, Ledger 27, Governance 17, Economics 20, Providers 24, Architecture 5, Host.Web 32) + 10 SPA (vitest); 0 vulnerable production packages"
 last_updated_by: P5-T03

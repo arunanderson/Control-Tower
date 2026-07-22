@@ -5,31 +5,33 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | Field             | Value                                                                                                  |
 | ----------------- | ------------------------------------------------------------------------------------------------------ |
 | **Current phase** | Phase 5 — Enterprise readiness foundations                                                             |
-| **Current epic**  | Existing-context enterprise controls; reporting reproducibility is complete                            |
-| **Current task**  | P5-T03 complete — tenant-scoped legal hold and retention precedence                                    |
-| **Overall state** | **Building tenant-independent enterprise controls; Microsoft providers remain tenant-gated.**          |
+| **Current epic**  | Build-state reconciliation after enterprise-control merge trains                                       |
+| **Current task**  | P0-T17 complete — repository state reconciled through PR #18                                           |
+| **Overall state** | **Development capability slices are green; production readiness remains materially incomplete.**       |
 | **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report; emergent-first |
 | **Last updated**  | 2026-07-22                                                                                             |
 | **Updated by**    | Claude Code (build agent)                                                                              |
 
 ## Completed & merged on `main`
 
-- **E0/E1 rails + CI** (#1) · **E2 platform skeleton + tenancy** (#3) · **E3 event backbone** (#4) · **Platform foundation** (#5) · **Asset Ledger C1** (#6) · **Cost & Value Intelligence C3** (#7) · **Governance Orchestration C2** (#8) · **Experience Layer C7** (#9) · **Provider framework C4.5, Phase A** (#10) · **C4 observation ingestion** (#11) · **C1 entity resolution** (#12) · **Resolution Workbench** (#13).
+- **E0/E1 rails + CI** (#1) · **E2 platform skeleton + tenancy** (#3) · **E3 event backbone** (#4) · **Platform foundation** (#5) · **Asset Ledger C1** (#6) · **Cost & Value Intelligence C3** (#7) · **Governance Orchestration C2** (#8) · **Experience Layer C7** (#9) · **Provider framework C4.5, Phase A** (#10) · **C4 observation ingestion** (#11) · **C1 entity resolution** (#12) · **Resolution Workbench** (#13) · **coverage/freshness** (#14) · **privileged-read audit** (#15) · **provider sweep execution** (#16) · **reporting snapshots** (#17) · **legal hold** (#18).
 - **C4 observation ingestion (P6-T02):** the "one door in" (ADR-009/020) — contract-validate → privacy Gate 1 (L1) → delta-suppress → append immutable `ProviderObservation` → emit `ObservationIngested` to the hash-chained stream + outbox.
 - **C1 entity resolution (P6-T03):** consumes `ObservationIngested` via **host-composed delivery** (Providers ⊥ Ledger); identity aliases, **deterministic matching**, link / new-asset / **MergeCase**; **High auto-links, sub-High never auto-links**; **lowest-confidence-wins** roll-up; **merge/split** without touching observations; links **severed/superseded, never deleted**; tenant-isolated + idempotent; Microsoft rules PoC-gated.
 - **C4 sweep execution (P6-T07):** secret-free tenant job enters the event/outbox backbone; the worker resolves an existing provider connection and invokes the invariant ingestion pipeline with idempotent completion and retry-safe claims (#16).
 
-## In progress (current merge train)
+## Paused local draft
 
-- **C9 legal hold (P5-T03) — tenant-independent:** authorised placement is reason-bound, scoped and evented; release requires approval evidence and retains history. Active matching holds expose the mandatory deny-deletion decision for retention. **135 backend + 10 SPA tests green**; 0 vulnerable production packages.
+- **P5-T04 retention enforcement:** incomplete work is preserved outside `main` in a named local Git stash. It is not committed, pushed, active or represented as implemented. Its contract must require an authoritative jurisdiction-policy provider rather than operator-supplied legal bounds.
 
 ## Blocked (TENANT GATE — Phase B, external dependency)
 
-- **Phase B — Microsoft providers + Gate-1 PoC execution:** a human gate. Requires a provisioned M365 tenant, licences, admin consent, and sample agent archetypes (full list + Gate-1 plan + rollback in **`docs/build/plans/PROVIDER-INTEGRATION-READINESS.md`**). **Wave 0** (zero-cost validation) is the next human step; a **Microsoft dev sandbox** was chosen but **could not be provisioned — Microsoft's provisioning service is currently unavailable** (external dependency, not a project blocker). No Microsoft/Graph/Copilot/Entra code exists and no permissions were requested.
+- **Phase B — Microsoft providers + Gate-1 PoC execution:** Cursor is waiting at Wave 0 Step 0.3 for a human permission-catalogue check. No permission, consent or credential should be added during that check. Microsoft provider implementation remains gated on real PoC findings.
+- **Retention jurisdiction authority:** actual jurisdiction floors/ceilings require an authoritative, versioned Legal-owned policy source. The engine may be built against that fail-closed port, but production policy values cannot be invented by an implementation agent.
 
 ## Required Arun actions
 
-- **Retry Wave 0 provisioning** when Microsoft's service is back (dev sandbox → the three zero-cost checks), then return the results per the readiness plan.
+- **Complete Cursor's Wave 0 Step 0.3** permission-catalogue check and return the observed permission names or “none found.”
+- **Confirm Legal ownership and source** for versioned jurisdiction retention floors/ceilings before production policy activation.
 - **Branch protection + CODEOWNERS enforcement + `production` environment** (manual GitHub config) — recommended.
 
 ## Test status
@@ -38,11 +40,11 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Deployment status
 
-- Nothing deployed. No production access/credentials/secrets. No frozen-doc changes.
+- Nothing deployed. The web host registers application modules only in Development; the worker still uses in-memory adapters. There is no production PostgreSQL/RLS, Service Bus, Key Vault, Blob/WORM, Entra authentication, IaC, observability or DR evidence. No production access/credentials/secrets and no frozen-doc changes.
 
 ## Next autonomous train
 
-- **Policy-driven retention enforcement**, now required to call the C9 legal-hold precedence decision before deletion and to event every deletion. Export/deletion follows. Decision Intelligence (C6) remains intentionally vacant (ADR-010). **Phase B** remains tenant-gated.
+- **Policy-driven retention mechanism**, using a versioned jurisdiction-policy provider and failing closed without an authoritative rule. It must call C9 legal-hold precedence before deletion and event every deletion. Actual legal values remain human-governed. **Phase B** remains tenant-gated.
 
 ## Overall Blueprint Completion
 
@@ -59,4 +61,4 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | Decision Intelligence | Not Started | C6 intentionally vacant (ADR-010) — no separate context planned                       |
 | Provider Integrations | Blocked     | Microsoft Graph/Copilot/Entra/PPAC providers — need the tenant (Phase B)              |
 | Microsoft PoCs        | Blocked     | Gate-1 PoC-1/2/3 — need the tenant; Wave 0 provisioning externally unavailable        |
-| Production Readiness  | In Progress | Enterprise controls underway; Azure adapters/IaC later require production credentials |
+| Production Readiness  | In Progress | Development seams only; identity, Gate 2, exports, Azure adapters/IaC and DR remain   |

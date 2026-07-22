@@ -2,16 +2,17 @@
 type: blocked
 schema_version: 1
 task: P0-T16
-blocked_at: 2026-07-16
+blocked_at: 2026-07-22
 severity: high
-awaiting: Arun — provision Gate-1 PoC tenant + Entra app registrations + consent
+awaiting: Arun — complete Wave 0 catalogue checks, then Gate-1 tenant prerequisites and consent
 ---
 
 ## Summary
 
-Gate-1 PoC **execution** (P0-T16) is blocked: it requires a representative Microsoft 365 tenant and
-consented Entra app registrations that only a human can provision. Granting Microsoft tenant
-permissions/consent is a human gate the build agent may not perform.
+Gate-1 PoC **execution** (P0-T16) is blocked on Microsoft tenant actions. Cursor is currently at Wave
+0 Step 0.3: a human must inspect the Entra application-permission catalogue without selecting a
+permission, granting consent or creating credentials. Full execution later requires the representative
+tenant prerequisites and consent that only a human can provide.
 
 ## What I was doing
 
@@ -20,16 +21,17 @@ The database-engine decision (DEC-001) is recorded. The bootstrap rails + CI are
 
 ## The blocker
 
-No representative tenant is available. The frozen spec (`poc-gate1-specifications.md`) requires an
-Agent 365 licence, four agent archetypes, a Foundry project, and app registrations with
-`CopilotPackages.Read.All` / PPAC RBAC Reader / `AgentIdentity.Read.All`-family / ARM Reader —
-plus interactive admin consent. None can be created autonomously.
+The permission-catalogue result is not yet recorded. The frozen spec (`poc-gate1-specifications.md`)
+also requires an Agent 365 licence, four agent archetypes, a Foundry project, and app registrations
+with `CopilotPackages.Read.All` / PPAC RBAC Reader / an `AgentIdentity.Read.All`-family permission /
+ARM Reader, plus interactive admin consent. None can be assumed or granted autonomously.
 
 ## What I need to proceed
 
-Arun to: (1) provision/point to a representative M365 tenant meeting the spec preconditions;
-(2) create the Entra app registration + grant consent; (3) supply tokens to the human operator who
-runs `poc/poc1_appid_crosswalk.sh`, `poc2_manifest_id.sh`, `poc3_package_api.sh` and appends findings.
+Arun to: (1) complete Wave 0 Step 0.3 and report the observed permission names or “none found”;
+(2) when the readiness plan permits, provision/point to the representative tenant prerequisites and
+approve the required registration/consent actions; (3) supply tokens to the human operator who runs
+the quarantined PoCs and appends findings.
 
 ## What I did NOT do (to avoid guessing)
 
@@ -37,3 +39,11 @@ runs `poc/poc1_appid_crosswalk.sh`, `poc2_manifest_id.sh`, `poc3_package_api.sh`
 - Did not request or store any tenant credentials.
 - Did not finalise Stage 5 (it is gated on real PoC-1/2/3 results; PoC-1 failure requires escalation
   before finalisation) — Stage 5 finalisation is a human-led PD-006 revision regardless.
+
+## Parallel human gate — retention jurisdiction authority
+
+P5-T04 retention enforcement must not accept jurisdiction floors and ceilings from the same tenant
+command that chooses a retention duration. The safe mechanism is an authoritative, versioned
+jurisdiction-policy provider owned through the Legal/Privacy governance process; tenant configuration
+may choose a duration only within those externally governed bounds. The engine can fail closed behind
+that port, but production policy values cannot be invented or activated by an implementation agent.
