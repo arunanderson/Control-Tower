@@ -19,6 +19,14 @@ export function TrustArea({ coverage }: { coverage: CoverageView }) {
       <p data-testid="coverage-note">
         <em>{coverage.coverageNote}</em>
       </p>
+      <ul aria-label="Provider coverage">
+        {coverage.surfaces.map((surface) => (
+          <li key={`${surface.connectionRef}:${surface.surfaceId}`}>
+            <strong>{surface.surfaceId}</strong>: {surface.state}, {surface.isFresh ? "fresh" : "stale"}
+            {" — "}{surface.coveredCapabilities.join(", ") || "no capabilities evidenced"}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

@@ -28,6 +28,7 @@ public static class LedgerModuleServiceCollectionExtensions
         // The C4→C1 seam: registered as an integration-event handler so the host (with an outbox
         // dispatcher) delivers ObservationIngested to resolution. Providers is never referenced.
         services.AddScoped<IIntegrationEventHandler, ObservationIngestedHandler>();
+        services.AddScoped<IIntegrationEventHandler, ProviderCoverageUpdatedHandler>();
         return services;
     }
 }

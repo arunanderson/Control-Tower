@@ -43,3 +43,23 @@ public sealed record ObservationIngested : ProviderEvent
     public required string DisplayName { get; init; }
     public required string AssetType { get; init; }
 }
+
+/// <summary>
+/// Self-contained coverage fact emitted after an ingestion run is durably recorded. C1.6 consumes
+/// this through the outbox; it never reads the provider store (I3).
+/// </summary>
+public sealed record ProviderCoverageUpdated : ProviderEvent
+{
+    public required Guid RunId { get; init; }
+    public required string Tenant { get; init; }
+    public required string ConnectionRef { get; init; }
+    public required string SurfaceId { get; init; }
+    public required string Capability { get; init; }
+    public required string Outcome { get; init; }
+    public required DateTimeOffset CompletedAt { get; init; }
+    public required double FreshnessExpectationSeconds { get; init; }
+    public required int Observed { get; init; }
+    public required int New { get; init; }
+    public required int Changed { get; init; }
+    public required int Suppressed { get; init; }
+}

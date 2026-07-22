@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Linq;
 using System.Threading.Tasks;
 using ControlTower.Adapters.InMemory;
@@ -13,6 +14,36 @@ namespace ControlTower.Modules.Providers.Tests;
 
 public class ObservationIngestionTests
 {
+    private sealed class FailingProvider : IProvider
+    {
+        public ProviderManifest Manifest { get; } = new()
+        {
+            SurfaceId = "failing",
+            DisplayName = "Failing",
+            Version = "1.0.0",
+            Capabilities = new HashSet<ProviderCapability> { ProviderCapability.Inventory },
+            NativeIdentifierTypes = ["test:id"],
+            PayloadSchemaVersion = 1,
+            Auth = new ProviderAuthRequirement(ProviderAuthKind.None, [], null),
+            FreshnessExpectation = TimeSpan.FromHours(1),
+        };
+
+        public Task<ProviderHealth> CheckHealthAsync(ProviderConnectionContext context, CancellationToken ct = default) =>
+            Task.FromResult(new ProviderHealth(ProviderHealthStatus.Degraded, DateTimeOffset.UtcNow, "test"));
+
+        public async IAsyncEnumerable<RawObservation> AcquireAsync(
+            ProviderConnectionContext context,
+            ProviderCapability capability,
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await Task.Yield();
+            throw new ProviderException("acquisition failed");
+#pragma warning disable CS0162
+            yield break;
+#pragma warning restore CS0162
+        }
+    }
+
     private sealed record Rig(
         ObservationIngestionService Service,
         IObservationStore Store,
@@ -99,15 +130,16 @@ public class ObservationIngestionTests
 
         await r.Service.IngestAsync(new CsvManualImportProvider(), CsvContext(TwoRows), ProviderCapability.Inventory);
 
-        // Only ingestion runs in this rig, so every appended event is an ObservationIngested.
+        // Two observation events plus one self-contained coverage fact for the completed run.
         var stream = await r.Events.ReadAllAsync();
-        Assert.Equal(2, stream.Count);
+        Assert.Equal(3, stream.Count);
         var payloads = stream.Select(e => System.Text.Encoding.UTF8.GetString(e.Payload)).ToList();
         Assert.Contains(payloads, p => p.Contains("bot-1"));
         Assert.Contains(payloads, p => p.Contains("bot-2"));
 
         var messages = await r.Outbox.DequeueBatchAsync(100);
         Assert.Equal(2, messages.Count(m => m.Topic == ObservationIngestionService.ObservationIngestedTopic));
+        Assert.Single(messages, m => m.Topic == ObservationIngestionService.ProviderCoverageUpdatedTopic);
     }
 
     [Fact]
@@ -125,6 +157,22 @@ public class ObservationIngestionTests
         Assert.Equal(2, run.New);
         Assert.Equal(0, run.Suppressed);
         Assert.Equal("Completed", run.Outcome);
+    }
+
+    [Fact]
+    public async Task Failed_acquisition_records_and_emits_degraded_coverage_before_rethrowing()
+    {
+        var r = Build();
+        using var _ = r.Accessor.BeginScope(new TenantId(Guid.NewGuid()));
+
+        await Assert.ThrowsAsync<ProviderException>(() =>
+            r.Service.IngestAsync(new FailingProvider(), CsvContext(TwoRows), ProviderCapability.Inventory));
+
+        var run = Assert.Single(await r.Store.RunsAsync());
+        Assert.Equal("Degraded", run.Outcome);
+        var message = Assert.Single(await r.Outbox.DequeueBatchAsync(100),
+            m => m.Topic == ObservationIngestionService.ProviderCoverageUpdatedTopic);
+        Assert.Contains("Degraded", System.Text.Encoding.UTF8.GetString(message.Payload));
     }
 
     [Fact]

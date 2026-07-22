@@ -25,6 +25,7 @@ public sealed class ObservationIngestionService(
     ITenantContextAccessor tenants)
 {
     public const string ObservationIngestedTopic = "provider.observation-ingested";
+    public const string ProviderCoverageUpdatedTopic = "provider.coverage-updated";
 
     public async Task<IngestionResult> IngestAsync(
         IProvider provider,
@@ -50,101 +51,134 @@ public sealed class ObservationIngestionService(
 
         int observed = 0, added = 0, changed = 0, suppressed = 0;
 
-        await foreach (var raw in provider.AcquireAsync(context, capability, ct))
+        try
         {
-            observed++;
-
-            var deltaKey = ObservationNormalization.DeltaKeyFor(context.ConnectionId, raw);
-            var hash = ObservationNormalization.ContentHash(raw);
-            var last = await store.LastContentHashAsync(deltaKey, ct);
-
-            var delta = last is null
-                ? DeltaStatus.New
-                : (last == hash ? DeltaStatus.Unchanged : DeltaStatus.Changed);
-
-            if (delta == DeltaStatus.Unchanged)
+            await foreach (var raw in provider.AcquireAsync(context, capability, ct))
             {
-                suppressed++; // delta-suppress: the stream records only what changed
-                continue;
+                observed++;
+
+                var deltaKey = ObservationNormalization.DeltaKeyFor(context.ConnectionId, raw);
+                var hash = ObservationNormalization.ContentHash(raw);
+                var last = await store.LastContentHashAsync(deltaKey, ct);
+
+                var delta = last is null
+                    ? DeltaStatus.New
+                    : (last == hash ? DeltaStatus.Unchanged : DeltaStatus.Changed);
+
+                if (delta == DeltaStatus.Unchanged)
+                {
+                    suppressed++; // delta-suppress: the stream records only what changed
+                    continue;
+                }
+
+                var observation = new ProviderObservation
+                {
+                    ObservationId = Guid.NewGuid(),
+                    Tenant = tenant,
+                    ConnectionRef = context.ConnectionId,
+                    SurfaceId = raw.SurfaceId,
+                    Kind = ObservationNormalization.KindFor(raw.Capability),
+                    NativeIdentifiers = raw.NativeIdentifiers,
+                    Payload = raw.Attributes,
+                    ObservedAt = raw.ObservedAt,
+                    IngestedAt = DateTimeOffset.UtcNow,
+                    PrivacyMarking = PrivacyMarking.L1, // Gate 1 default; set once (ADR-014)
+                    DeltaStatus = delta,
+                    EvidenceLabel = raw.EvidenceLabel,
+                    ContentHash = hash,
+                };
+                await store.AppendAsync(observation, ct);
+
+                var primary = raw.NativeIdentifiers.Count > 0
+                    ? raw.NativeIdentifiers[0]
+                    : new NativeIdentifier(raw.SurfaceId, "(none)", string.Empty);
+
+                // Generic well-known attribute conventions — provider-agnostic, with fallbacks.
+                var displayName = raw.Attributes.TryGetValue("displayName", out var dn) && !string.IsNullOrWhiteSpace(dn)
+                    ? dn
+                    : (!string.IsNullOrWhiteSpace(primary.Value) ? primary.Value : raw.SurfaceId);
+                var assetType = raw.Attributes.TryGetValue("assetType", out var at) && !string.IsNullOrWhiteSpace(at)
+                    ? at
+                    : string.Empty;
+
+                await EmitAsync(new ObservationIngested
+                {
+                    ObservationId = observation.ObservationId,
+                    Tenant = tenant.ToString(),
+                    ConnectionRef = observation.ConnectionRef,
+                    SurfaceId = observation.SurfaceId,
+                    Kind = observation.Kind.ToString(),
+                    DeltaStatus = observation.DeltaStatus.ToString(),
+                    PrivacyMarking = observation.PrivacyMarking.ToString(),
+                    PrimaryIdentifierSystem = primary.System,
+                    PrimaryIdentifierType = primary.IdentifierType,
+                    PrimaryIdentifierValue = primary.Value,
+                    EvidenceLabel = observation.EvidenceLabel,
+                    ObservedAt = observation.ObservedAt,
+                    DisplayName = displayName,
+                    AssetType = assetType,
+                }, ct);
+
+                if (delta == DeltaStatus.New) added++; else changed++;
+                if (raw.ObservedAt > highWater) highWater = raw.ObservedAt;
             }
-
-            var observation = new ProviderObservation
-            {
-                ObservationId = Guid.NewGuid(),
-                Tenant = tenant,
-                ConnectionRef = context.ConnectionId,
-                SurfaceId = raw.SurfaceId,
-                Kind = ObservationNormalization.KindFor(raw.Capability),
-                NativeIdentifiers = raw.NativeIdentifiers,
-                Payload = raw.Attributes,
-                ObservedAt = raw.ObservedAt,
-                IngestedAt = DateTimeOffset.UtcNow,
-                PrivacyMarking = PrivacyMarking.L1, // Gate 1 default; set once (ADR-014)
-                DeltaStatus = delta,
-                EvidenceLabel = raw.EvidenceLabel,
-                ContentHash = hash,
-            };
-            await store.AppendAsync(observation, ct);
-
-            var primary = raw.NativeIdentifiers.Count > 0
-                ? raw.NativeIdentifiers[0]
-                : new NativeIdentifier(raw.SurfaceId, "(none)", string.Empty);
-
-            // Generic well-known attribute conventions — provider-agnostic, with fallbacks.
-            var displayName = raw.Attributes.TryGetValue("displayName", out var dn) && !string.IsNullOrWhiteSpace(dn)
-                ? dn
-                : (!string.IsNullOrWhiteSpace(primary.Value) ? primary.Value : raw.SurfaceId);
-            var assetType = raw.Attributes.TryGetValue("assetType", out var at) && !string.IsNullOrWhiteSpace(at)
-                ? at
-                : string.Empty;
-
-            await EmitAsync(new ObservationIngested
-            {
-                ObservationId = observation.ObservationId,
-                Tenant = tenant.ToString(),
-                ConnectionRef = observation.ConnectionRef,
-                SurfaceId = observation.SurfaceId,
-                Kind = observation.Kind.ToString(),
-                DeltaStatus = observation.DeltaStatus.ToString(),
-                PrivacyMarking = observation.PrivacyMarking.ToString(),
-                PrimaryIdentifierSystem = primary.System,
-                PrimaryIdentifierType = primary.IdentifierType,
-                PrimaryIdentifierValue = primary.Value,
-                EvidenceLabel = observation.EvidenceLabel,
-                ObservedAt = observation.ObservedAt,
-                DisplayName = displayName,
-                AssetType = assetType,
-            }, ct);
-
-            if (delta == DeltaStatus.New) added++; else changed++;
-            if (raw.ObservedAt > highWater) highWater = raw.ObservedAt;
+        }
+        catch
+        {
+            await RecordRunAndCoverageAsync("Degraded", DateTimeOffset.UtcNow, ct);
+            throw;
         }
 
-        await store.RecordRunAsync(new IngestionRun
-        {
-            RunId = runId,
-            Tenant = tenant,
-            ConnectionRef = context.ConnectionId,
-            SurfaceId = provider.Manifest.SurfaceId,
-            Capability = capability,
-            StartedAt = startedAt,
-            CompletedAt = DateTimeOffset.UtcNow,
-            Observed = observed,
-            New = added,
-            Changed = changed,
-            Suppressed = suppressed,
-            Outcome = "Completed",
-        }, ct);
+        var completedAt = DateTimeOffset.UtcNow;
+        await RecordRunAndCoverageAsync("Completed", completedAt, ct);
 
         await watermarks.SetAsync(context.ConnectionId, highWater.ToString("O"), ct);
 
         return new IngestionResult(runId, observed, added, changed, suppressed);
+
+        async Task RecordRunAndCoverageAsync(string outcome, DateTimeOffset endedAt, CancellationToken token)
+        {
+            await store.RecordRunAsync(new IngestionRun
+            {
+                RunId = runId,
+                Tenant = tenant,
+                ConnectionRef = context.ConnectionId,
+                SurfaceId = provider.Manifest.SurfaceId,
+                Capability = capability,
+                StartedAt = startedAt,
+                CompletedAt = endedAt,
+                Observed = observed,
+                New = added,
+                Changed = changed,
+                Suppressed = suppressed,
+                Outcome = outcome,
+            }, token);
+
+            await EmitAsync(new ProviderCoverageUpdated
+            {
+                RunId = runId,
+                Tenant = tenant.ToString(),
+                ConnectionRef = context.ConnectionId,
+                SurfaceId = provider.Manifest.SurfaceId,
+                Capability = capability.ToString(),
+                Outcome = outcome,
+                CompletedAt = endedAt,
+                FreshnessExpectationSeconds = provider.Manifest.FreshnessExpectation.TotalSeconds,
+                Observed = observed,
+                New = added,
+                Changed = changed,
+                Suppressed = suppressed,
+            }, ProviderCoverageUpdatedTopic, token);
+        }
     }
 
     private async Task EmitAsync(ObservationIngested @event, CancellationToken ct)
+        => await EmitAsync(@event, ObservationIngestedTopic, ct);
+
+    private async Task EmitAsync(ProviderEvent @event, string topic, CancellationToken ct)
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(@event, @event.GetType());
-        await events.AppendAsync(@event, payload, ct);       // audit trail (ADR-015)
-        await outbox.EnqueueAsync(ObservationIngestedTopic, payload, ct); // reliable hand-off to C1 (Stage 9 §2.3)
+        await events.AppendAsync(@event, payload, ct); // audit trail (ADR-015)
+        await outbox.EnqueueAsync(topic, payload, ct); // reliable host-composed hand-off (Stage 9 §2.3)
     }
 }

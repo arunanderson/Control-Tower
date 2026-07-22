@@ -78,6 +78,20 @@ export interface CoverageView {
   lastSuccessfulSweep?: string | null;
   coverageNote: string;
   asOf: string;
+  surfaces: ProviderSurfaceCoverageView[];
+}
+
+export interface ProviderSurfaceCoverageView {
+  connectionRef: string;
+  surfaceId: string;
+  coveredCapabilities: string[];
+  state: string;
+  isFresh: boolean;
+  lastSuccessfulSweep?: string | null;
+  observed: number;
+  new: number;
+  changed: number;
+  suppressed: number;
 }
 
 // Resolution & Merge Workbench read models (I4). Display only — no calculation, no domain objects.
