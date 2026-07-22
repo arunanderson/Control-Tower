@@ -63,3 +63,13 @@ public sealed record ProviderCoverageUpdated : ProviderEvent
     public required int Changed { get; init; }
     public required int Suppressed { get; init; }
 }
+
+/// <summary>Self-contained, secret-free request for the worker to execute a configured provider sweep.</summary>
+public sealed record ProviderSweepRequested : ProviderEvent
+{
+    public required Guid JobId { get; init; }
+    public required string Tenant { get; init; }
+    public required string ConnectionId { get; init; }
+    public required string SurfaceId { get; init; }
+    public required string Capability { get; init; }
+}

@@ -1,6 +1,7 @@
 using ControlTower.Adapters.InMemory;
 using ControlTower.Host.Worker;
 using ControlTower.Modules.Ledger;
+using ControlTower.Modules.Providers;
 using ControlTower.Platform.DependencyInjection;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -15,6 +16,7 @@ builder.Services.AddInMemoryAdapters();
 // C4→C1 seam — no module references another. (Dev in-memory stores are per-process; production shares
 // PostgreSQL/Service Bus so the web and worker hosts see the same state.)
 builder.Services.AddLedgerModule();
+builder.Services.AddProviderFramework();
 builder.Services.AddHostedService<OutboxDispatcher>();
 
 builder.Build().Run();

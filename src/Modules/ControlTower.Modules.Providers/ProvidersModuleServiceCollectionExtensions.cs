@@ -1,6 +1,7 @@
 using ControlTower.Modules.Providers.Application;
 using ControlTower.Modules.Providers.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using ControlTower.Platform.Events;
 
 namespace ControlTower.Modules.Providers;
 
@@ -21,8 +22,12 @@ public static class ProvidersModuleServiceCollectionExtensions
         });
         services.AddSingleton<IWatermarkStore, InMemoryWatermarkStore>();
         services.AddSingleton<IObservationStore, InMemoryObservationStore>();
+        services.AddSingleton<IProviderConnectionStore, InMemoryProviderConnectionStore>();
+        services.AddSingleton<IProviderJobReceiptStore, InMemoryProviderJobReceiptStore>();
         services.AddSingleton<ProviderDiagnostics>();
         services.AddScoped<ObservationIngestionService>();
+        services.AddScoped<ProviderSweepRequestService>();
+        services.AddScoped<IIntegrationEventHandler, ProviderSweepRequestedHandler>();
         return services;
     }
 }

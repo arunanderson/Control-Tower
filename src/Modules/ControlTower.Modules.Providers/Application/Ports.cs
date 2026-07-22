@@ -26,3 +26,16 @@ public interface IWatermarkStore
     Task<string?> GetAsync(string connectionId, CancellationToken ct = default);
     Task SetAsync(string connectionId, string watermark, CancellationToken ct = default);
 }
+
+public interface IProviderConnectionStore
+{
+    Task SaveAsync(ProviderConnection connection, CancellationToken ct = default);
+    Task<ProviderConnection?> GetAsync(string connectionId, CancellationToken ct = default);
+}
+
+public interface IProviderJobReceiptStore
+{
+    Task<bool> TryStartAsync(Guid jobId, CancellationToken ct = default);
+    Task CompleteAsync(Guid jobId, CancellationToken ct = default);
+    Task ReleaseAsync(Guid jobId, CancellationToken ct = default);
+}
