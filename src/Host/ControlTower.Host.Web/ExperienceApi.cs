@@ -60,5 +60,71 @@ public static class ExperienceApi
 
         // Registered providers (C4.5 discovery / metadata) — manifests only.
         api.MapGet("/admin/providers", (IProviderRegistry registry) => Results.Ok(registry.Discover()));
+
+        MapResolutionWorkbench(api);
     }
+
+    /// <summary>
+    /// Resolution &amp; Merge Workbench (C7). Read endpoints are read-model-only (I4): the alias graph,
+    /// resolution links, merge cases and confidence labels. Operator actions (merge/split/manual-link/
+    /// resolve-case) are commands routed to the C1 resolution service, which emits immutable audit events
+    /// — the UI holds no business logic and never touches provider observations.
+    /// </summary>
+    private static void MapResolutionWorkbench(RouteGroupBuilder api)
+    {
+        // Reads (read-model-only).
+        api.MapGet("/resolution/merge-cases", async (ResolutionWorkbenchReadModel wb) => Results.Ok(await wb.OpenMergeCasesAsync()));
+        api.MapGet("/resolution/assets/{id:guid}", async (Guid id, ResolutionWorkbenchReadModel wb) =>
+        {
+            var view = await wb.AssetResolutionAsync(new LedgerAssetId(id));
+            return view is null ? Results.NotFound() : Results.Ok(view);
+        });
+
+        // Operator actions (event-driven, auditable; the UI just invokes them).
+        api.MapPost("/resolution/merge", (MergeRequest req, EntityResolutionService svc, HttpContext http) =>
+            Guard(() => svc.MergeAsync(new LedgerAssetId(req.TargetId), new LedgerAssetId(req.SourceId), Operator(http))));
+
+        api.MapPost("/resolution/split", (SplitRequest req, EntityResolutionService svc, HttpContext http) =>
+            Guard(async () =>
+            {
+                var newId = await svc.SplitAsync(new LedgerAssetId(req.AssetId), req.LinkIds, req.NewDisplayName, req.NewAssetType, Operator(http));
+                return new { newAssetId = newId.Value };
+            }));
+
+        api.MapPost("/resolution/manual-link", (ManualLinkRequest req, EntityResolutionService svc, HttpContext http) =>
+            Guard(async () =>
+            {
+                var id = await svc.ApproveManualLinkAsync(
+                    new LedgerAssetId(req.AssetId),
+                    NativeIdentifierSet.Of(new NativeIdentifier(req.System, req.IdentifierType, req.Value)),
+                    req.ObservationRef,
+                    Operator(http));
+                return new { assetId = id.Value };
+            }));
+
+        api.MapPost("/resolution/merge-cases/{id:guid}/resolve", (Guid id, ResolveMergeCaseRequest req, EntityResolutionService svc, HttpContext http) =>
+            Guard(() => svc.ResolveMergeCaseAsync(id, req.Outcome, Operator(http))));
+    }
+
+    private static string Operator(HttpContext http) =>
+        http.Request.Headers.TryGetValue("X-Operator", out var op) && !string.IsNullOrWhiteSpace(op)
+            ? op.ToString()
+            : "operator";
+
+    private static async Task<IResult> Guard(Func<Task> action)
+    {
+        try { await action(); return Results.Ok(new { ok = true }); }
+        catch (DomainException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    }
+
+    private static async Task<IResult> Guard<T>(Func<Task<T>> action)
+    {
+        try { return Results.Ok(await action()); }
+        catch (DomainException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    }
+
+    private sealed record MergeRequest(Guid TargetId, Guid SourceId);
+    private sealed record SplitRequest(Guid AssetId, IReadOnlyList<Guid> LinkIds, string NewDisplayName, string NewAssetType);
+    private sealed record ManualLinkRequest(Guid AssetId, string System, string IdentifierType, string Value, Guid? ObservationRef);
+    private sealed record ResolveMergeCaseRequest(string Outcome);
 }

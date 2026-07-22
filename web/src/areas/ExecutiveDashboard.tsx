@@ -18,7 +18,8 @@ export function ExecutiveDashboard({ view }: { view: ExecutiveEconomicsView }) {
         Validated-to-Declared ratio: {view.validatedToDeclaredRatio.toFixed(2)}
       </div>
       <div data-testid="unattributed">
-        Unattributed cost: <EvidenceBadge amount={view.unattributedCost} /> ({view.unattributedPercent.toFixed(2)})
+        Unattributed cost: <EvidenceBadge amount={view.unattributedCost} /> (
+        {view.unattributedPercent.toFixed(2)})
       </div>
       <ConfidenceMix mix={view.confidenceMix} />
     </section>

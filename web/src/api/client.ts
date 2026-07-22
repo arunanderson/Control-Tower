@@ -1,9 +1,11 @@
 import type {
   AssetLedgerView,
+  AssetResolutionView,
   CoverageView,
   ExecutiveEconomicsView,
   GovernanceCaseView,
   GovernanceDebtView,
+  MergeCaseView,
   RoiView,
 } from "./types";
 
@@ -19,6 +21,11 @@ export interface ControlTowerApi {
   getGovernanceCases(): Promise<GovernanceCaseView[]>;
   getGovernanceDebt(): Promise<GovernanceDebtView[]>;
   getCoverage(): Promise<CoverageView>;
+  getMergeCases(): Promise<MergeCaseView[]>;
+  getAssetResolution(id: string): Promise<AssetResolutionView | null>;
+  // Operator actions — commands routed to the C1 resolution service (event-driven, auditable).
+  resolveMergeCase(id: string, outcome: string): Promise<void>;
+  mergeAssets(targetId: string, sourceId: string): Promise<void>;
 }
 
 export class HttpControlTowerApi implements ControlTowerApi {
@@ -41,14 +48,50 @@ export class HttpControlTowerApi implements ControlTowerApi {
       headers: { "X-Tenant-Id": this.tenantId },
     });
     if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`asset record failed: ${response.status}`);
+    if (!response.ok)
+      throw new Error(`asset record failed: ${response.status}`);
     return (await response.json()) as AssetLedgerView;
   };
-  getExecutive = () => this.get<ExecutiveEconomicsView>("/api/economics/executive");
+  getExecutive = () =>
+    this.get<ExecutiveEconomicsView>("/api/economics/executive");
   getPortfolioRoi = () => this.get<RoiView>("/api/economics/portfolio");
   getDepartmentRoi = () => this.get<RoiView[]>("/api/economics/departments");
   getAgentRoi = () => this.get<RoiView>("/api/economics/agents");
-  getGovernanceCases = () => this.get<GovernanceCaseView[]>("/api/governance/cases");
-  getGovernanceDebt = () => this.get<GovernanceDebtView[]>("/api/governance/debt");
+  getGovernanceCases = () =>
+    this.get<GovernanceCaseView[]>("/api/governance/cases");
+  getGovernanceDebt = () =>
+    this.get<GovernanceDebtView[]>("/api/governance/debt");
   getCoverage = () => this.get<CoverageView>("/api/trust/coverage");
+  getMergeCases = () =>
+    this.get<MergeCaseView[]>("/api/resolution/merge-cases");
+  getAssetResolution = async (id: string) => {
+    const response = await fetch(
+      `${this.baseUrl}/api/resolution/assets/${id}`,
+      {
+        headers: { "X-Tenant-Id": this.tenantId },
+      },
+    );
+    if (response.status === 404) return null;
+    if (!response.ok)
+      throw new Error(`asset resolution failed: ${response.status}`);
+    return (await response.json()) as AssetResolutionView;
+  };
+
+  private async post(path: string, body: unknown): Promise<void> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: "POST",
+      headers: {
+        "X-Tenant-Id": this.tenantId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok)
+      throw new Error(`POST ${path} failed: ${response.status}`);
+  }
+
+  resolveMergeCase = (id: string, outcome: string) =>
+    this.post(`/api/resolution/merge-cases/${id}/resolve`, { outcome });
+  mergeAssets = (targetId: string, sourceId: string) =>
+    this.post("/api/resolution/merge", { targetId, sourceId });
 }

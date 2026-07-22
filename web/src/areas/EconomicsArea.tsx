@@ -17,20 +17,34 @@ function RoiCard({ roi }: { roi: RoiView }) {
       <div data-testid="roi-figure">
         {roi.singlePointSuppressed ? (
           <em data-testid="roi-suppressed">
-            ROI shown as a range {roi.lowRoi.toFixed(2)}–{roi.highRoi.toFixed(2)} (validated-only {roi.validatedOnlyRoi.toFixed(2)}) — too
-            much soft evidence for a single number
+            ROI shown as a range {roi.lowRoi.toFixed(2)}–
+            {roi.highRoi.toFixed(2)} (validated-only{" "}
+            {roi.validatedOnlyRoi.toFixed(2)}) — too much soft evidence for a
+            single number
           </em>
         ) : (
-          <span>ROI {roi.singlePointRoi?.toFixed(2)} (validated-only {roi.validatedOnlyRoi.toFixed(2)})</span>
+          <span>
+            ROI {roi.singlePointRoi?.toFixed(2)} (validated-only{" "}
+            {roi.validatedOnlyRoi.toFixed(2)})
+          </span>
         )}
       </div>
-      <div>Payback: {roi.paybackMonths === null ? "n/a" : `${roi.paybackMonths} months`}</div>
+      <div>
+        Payback:{" "}
+        {roi.paybackMonths === null ? "n/a" : `${roi.paybackMonths} months`}
+      </div>
       <ConfidenceMix mix={roi.confidenceMix} />
     </div>
   );
 }
 
-export function EconomicsArea({ portfolio, departments }: { portfolio: RoiView; departments: RoiView[] }) {
+export function EconomicsArea({
+  portfolio,
+  departments,
+}: {
+  portfolio: RoiView;
+  departments: RoiView[];
+}) {
   return (
     <section>
       <h2>Economics</h2>
