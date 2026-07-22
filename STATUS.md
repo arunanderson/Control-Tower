@@ -5,8 +5,8 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | Field             | Value                                                                                                   |
 | ----------------- | ------------------------------------------------------------------------------------------------------- |
 | **Current phase** | Phase 6 — Provider Integration (C4)                                                                     |
-| **Current epic**  | C4→C1→C7 pipeline (ingestion + resolution + workbench) built tenant-independently; Phase B stays gated  |
-| **Current task**  | P6-T05 complete — honest C1.6 coverage/freshness from actual C4 ingestion runs                          |
+| **Current epic**  | Tenant-independent provider-to-experience pipeline plus C9 trust surfacing; Phase B stays gated         |
+| **Current task**  | P6-T06 complete — privileged-read enforcement, immutable audit event, customer-visible Trust log        |
 | **Overall state** | **Building tenant-independent C4/C1 work; Microsoft providers await the tenant (external dependency).** |
 | **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report; emergent-first  |
 | **Last updated**  | 2026-07-22                                                                                              |
@@ -20,7 +20,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## In progress (current merge train)
 
-- **C1.6 coverage/freshness (P6-T05) — tenant-independent:** every completed or degraded C4 ingestion run emits a self-contained coverage fact through the event store/outbox. C1.6 projects per-surface state, evidenced capabilities, freshness, last successful sweep and honest counts; C7 Trust renders only the projection. Tenant-isolated, replay-idempotent, and older replays cannot regress current coverage. **120 backend + 9 SPA tests green**; 0 vulnerable production packages.
+- **C9 privileged-read audit (P6-T06) — tenant-independent:** reuses the existing `IPrivilegedReadAuditor`; explicit C7 endpoint marking requires actor + purpose, emits a hash-chained audit event, and projects a tenant-isolated customer-visible Trust log. Current L1 views remain unmarked. **123 backend + 10 SPA tests green**.
 
 ## Blocked (TENANT GATE — Phase B, external dependency)
 
@@ -33,7 +33,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Test status
 
-- Backend: **120 tests green** (Platform 10, Ledger 27, Governance 17, Economics 16, Providers 21, Architecture 5, Host.Web 24); build 0/0. SPA: **9 vitest green**; `npm run build` clean; production deps 0 vulns.
+- Backend: **123 tests green** (Platform 10, Ledger 27, Governance 17, Economics 16, Providers 21, Architecture 5, Host.Web 27); build 0/0. SPA: **10 vitest green**; `npm run build` clean; production dependencies 0 vulnerabilities.
 
 ## Deployment status
 
@@ -41,7 +41,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Next autonomous train
 
-- **Next tenant-independent capability from the implementation handoff package** — **privileged-read audit** surfacing (C9/ADR-021), a **provider sync scheduler** worker loop, or enterprise-readiness foundations that need no production credentials. Decision Intelligence (C6) is intentionally vacant (ADR-010). **Phase B** remains tenant-gated.
+- **Next tenant-independent capability from the implementation handoff package** — a **provider sync scheduler** worker loop or enterprise-readiness foundations (legal hold, export/deletion, snapshot freeze, retention) that need no production credentials. Decision Intelligence (C6) is intentionally vacant (ADR-010). **Phase B** remains tenant-gated.
 
 ## Overall Blueprint Completion
 

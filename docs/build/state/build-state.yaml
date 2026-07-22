@@ -8,8 +8,8 @@ project:
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
 current_phase: PHASE-6 # Provider Integration (C4); Phase A complete on main
 current_epic: EPIC-6-1 # Provider framework (C4.5) — Phase A
-current_task: P6-T05 # complete
-status: in_progress # C4→C1→C7 pipeline + honest coverage/freshness built tenant-independently; Phase B remains gated
+current_task: P6-T06 # complete
+status: in_progress # tenant-independent pipeline + C9 privileged-read audit surfacing complete; Phase B remains gated
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
 blocked:
@@ -120,6 +120,11 @@ tasks:
       title: "C1.6 coverage/freshness — event-driven projection from actual C4 ingestion runs",
       status: complete,
     }
+  - {
+      id: P6-T06,
+      title: "C9 privileged-read auditing — explicit C7 filter + immutable event + customer-visible Trust log",
+      status: complete,
+    }
   - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked }
 decisions:
   - { id: DEC-001, title: Database engine (Azure PostgreSQL), status: recorded }
@@ -143,7 +148,7 @@ merged_prs:
   - { number: 13, title: Resolution & Merge Workbench (C7) }
 open_prs: []
 next_trains:
-  - "Next tenant-independent capability from the implementation handoff package. Candidates surviving audit: privileged-read audit surfacing (C9/ADR-021); provider sync scheduler/worker loop; enterprise-readiness foundations that do not require production credentials. Decision Intelligence (C6) is intentionally vacant (ADR-010). Continue until a genuine human gate."
+  - "Next tenant-independent capability from the implementation handoff package. Candidates surviving audit: provider sync scheduler/worker loop; enterprise-readiness foundations (legal hold, export/deletion, reporting-period snapshot, retention) that do not require production credentials. Decision Intelligence (C6) is intentionally vacant (ADR-010). Continue until a genuine human gate."
   - "TENANT GATE (Phase B): execute Gate-1 PoC-1/2/3 and implement the Microsoft Graph/Copilot/Entra/PPAC providers behind the existing provider contracts, and finalize the PoC-gated confidence rule table + alias types (see docs/build/plans/PROVIDER-INTEGRATION-READINESS.md). Human gate; Microsoft dev-sandbox provisioning currently unavailable (external dependency)."
-test_summary: "120 backend tests green (Platform 10, Ledger 27, Governance 17, Economics 16, Providers 21, Architecture 5, Host.Web 24) + 9 SPA (vitest); 0 vulnerable production packages"
-last_updated_by: P6-T05
+test_summary: "123 backend tests green (Platform 10, Ledger 27, Governance 17, Economics 16, Providers 21, Architecture 5, Host.Web 27) + 10 SPA (vitest); 0 vulnerable production packages"
+last_updated_by: P6-T06

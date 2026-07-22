@@ -7,6 +7,7 @@ import type {
   GovernanceCaseView,
   GovernanceDebtView,
   MergeCaseView,
+  PrivilegedAccessView,
   RoiView,
 } from "./api/types";
 import { ExecutiveDashboard } from "./areas/ExecutiveDashboard";
@@ -46,6 +47,7 @@ interface Loaded {
   debt: GovernanceDebtView[];
   coverage: CoverageView;
   mergeCases: MergeCaseView[];
+  privilegedAccess: PrivilegedAccessView[];
 }
 
 export function App() {
@@ -65,6 +67,7 @@ export function App() {
       api.getGovernanceDebt(),
       api.getCoverage(),
       api.getMergeCases(),
+      api.getPrivilegedAccess(),
     ])
       .then(
         ([
@@ -76,6 +79,7 @@ export function App() {
           debt,
           coverage,
           mergeCases,
+          privilegedAccess,
         ]) =>
           setData({
             assets,
@@ -86,6 +90,7 @@ export function App() {
             debt,
             coverage,
             mergeCases,
+            privilegedAccess,
           }),
       )
       .catch((e) => setError(String(e)));
@@ -140,7 +145,10 @@ export function App() {
       )}
       {data && area === "Trust" && (
         <>
-          <TrustArea coverage={data.coverage} />
+          <TrustArea
+            coverage={data.coverage}
+            privilegedAccess={data.privilegedAccess}
+          />
           <ResolutionWorkbench
             mergeCases={data.mergeCases}
             onResolve={resolveMergeCase}

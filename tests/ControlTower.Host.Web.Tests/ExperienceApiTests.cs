@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ControlTower.Modules.Ledger.Application;
+using ControlTower.Platform.Events;
 using ControlTower.Modules.Ledger.Domain;
 using ControlTower.Platform.Tenancy;
 using Microsoft.AspNetCore.Hosting;
@@ -74,6 +75,54 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
         var body = await TenantClient().GetStringAsync("/api/trust/coverage");
         Assert.Contains("providersConnected", body);
         Assert.Contains("coverageNote", body);
+    }
+
+    private HttpClient PrivilegedClient(Guid tenant, string actor = "alex", string purpose = "Support investigation")
+    {
+        var client = ClientFor(tenant);
+        client.DefaultRequestHeaders.Add("X-Actor", actor);
+        client.DefaultRequestHeaders.Add("X-Purpose", purpose);
+        return client;
+    }
+
+    private sealed record AccessDto(Guid AccessId, string Actor, string Purpose, string Resource, string CorrelationId);
+
+    [Fact]
+    public async Task Privileged_log_requires_actor_and_purpose()
+    {
+        var response = await ClientFor(Guid.NewGuid()).GetAsync("/api/trust/privileged-access");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Privileged_log_read_is_recorded_immutably_and_visible_on_the_next_read()
+    {
+        var tenant = Guid.NewGuid();
+        var client = PrivilegedClient(tenant);
+        Assert.Empty((await client.GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access"))!);
+
+        var records = await client.GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access");
+        var record = Assert.Single(records!);
+        Assert.Equal("alex", record.Actor);
+        Assert.Equal("Support investigation", record.Purpose);
+        Assert.Equal("trust.privileged-access-log", record.Resource);
+        Assert.False(string.IsNullOrWhiteSpace(record.CorrelationId));
+
+        using var scope = factory.Services.CreateScope();
+        var tenants = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+        using var _ = tenants.BeginScope(new TenantId(tenant));
+        var stream = await scope.ServiceProvider.GetRequiredService<IEventStore>().ReadAllAsync();
+        Assert.Contains(stream, e => System.Text.Encoding.UTF8.GetString(e.Payload).Contains("trust.privileged-access-log"));
+    }
+
+    [Fact]
+    public async Task L1_reads_are_not_misclassified_and_audit_log_is_tenant_isolated()
+    {
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        await ClientFor(tenantA).GetAsync("/api/trust/coverage");
+        Assert.Empty((await PrivilegedClient(tenantA).GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access"))!);
+        Assert.Empty((await PrivilegedClient(tenantB).GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access"))!);
     }
 
     [Fact]

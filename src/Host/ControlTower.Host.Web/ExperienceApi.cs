@@ -1,4 +1,5 @@
 using ControlTower.Modules.Economics.Application;
+using ControlTower.Modules.Audit;
 using ControlTower.Modules.Governance.Application;
 using ControlTower.Modules.Ledger.Application;
 using ControlTower.Modules.Ledger.Domain;
@@ -49,6 +50,17 @@ public static class ExperienceApi
 
         // Trust & coverage (honest coverage/freshness).
         api.MapGet("/trust/coverage", async (ICoverageReadModel coverage) => Results.Ok(await coverage.GetAsync()));
+        api.MapGet("/trust/privileged-access", async (PrivilegedAccessService audit) =>
+                Results.Ok((await audit.ListAsync()).Select(x => new
+                {
+                    x.AccessId,
+                    x.Record.Actor,
+                    x.Record.Purpose,
+                    resource = x.Record.ResourceId,
+                    x.Record.OccurredAt,
+                    x.CorrelationId,
+                })))
+            .AuditPrivilegedRead("trust.privileged-access-log");
 
         // Administration summary.
         api.MapGet("/admin/summary", (ITenantContextAccessor tenants) => Results.Ok(new
