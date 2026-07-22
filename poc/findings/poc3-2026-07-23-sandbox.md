@@ -8,10 +8,10 @@
 
 ## Endpoint observations
 
-| Endpoint | Result |
-|---|---|
+| Endpoint                                   | Result                                                          |
+| ------------------------------------------ | --------------------------------------------------------------- |
 | `GET /v1.0/copilot/admin/catalog/packages` | `403 Forbidden` — tenant requires a Microsoft Agent 365 licence |
-| `GET /beta/copilot/admin/catalog/packages` | `403 Forbidden` — same licence requirement |
+| `GET /beta/copilot/admin/catalog/packages` | `403 Forbidden` — same licence requirement                      |
 
 The Microsoft 365 admin centre showed only the Microsoft 365 E5 Developer subscription. No Agent 365
 licence was present or assignable in the tenant.
