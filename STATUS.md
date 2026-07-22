@@ -6,7 +6,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | ----------------- | ------------------------------------------------------------------------------------------------------ |
 | **Current phase** | Phase 5 — Enterprise readiness foundations                                                             |
 | **Current epic**  | Existing-context enterprise controls; reporting reproducibility is complete                            |
-| **Current task**  | P5-T02 complete — signed immutable reporting snapshots and restatement                                 |
+| **Current task**  | P5-T03 complete — tenant-scoped legal hold and retention precedence                                    |
 | **Overall state** | **Building tenant-independent enterprise controls; Microsoft providers remain tenant-gated.**          |
 | **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report; emergent-first |
 | **Last updated**  | 2026-07-22                                                                                             |
@@ -21,7 +21,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## In progress (current merge train)
 
-- **C3 reporting snapshot freeze (P5-T02) — tenant-independent:** periods follow Open → Closing → Frozen → Restated; signed snapshots persist immutable output plus a pinned input basis. Restatement appends a superseding version and hash-chained event without changing history. **132 backend + 10 SPA tests green**; 0 vulnerable production packages.
+- **C9 legal hold (P5-T03) — tenant-independent:** authorised placement is reason-bound, scoped and evented; release requires approval evidence and retains history. Active matching holds expose the mandatory deny-deletion decision for retention. **135 backend + 10 SPA tests green**; 0 vulnerable production packages.
 
 ## Blocked (TENANT GATE — Phase B, external dependency)
 
@@ -34,7 +34,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Test status
 
-- Backend: **132 tests green** (Platform 10, Ledger 27, Governance 17, Economics 20, Providers 24, Architecture 5, Host.Web 29); build 0/0. SPA: **10 vitest green**; `npm run build` clean; production dependencies 0 vulnerabilities.
+- Backend: **135 tests green** (Platform 10, Ledger 27, Governance 17, Economics 20, Providers 24, Architecture 5, Host.Web 32); build 0/0. SPA: **10 vitest green**; `npm run build` clean; production dependencies 0 vulnerabilities.
 
 ## Deployment status
 
@@ -42,7 +42,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Next autonomous train
 
-- **Legal hold before retention enforcement**, using the blueprint-defined retention/legal-hold controls in existing contexts. Export/deletion follows the same enterprise-readiness sequence. Decision Intelligence (C6) remains intentionally vacant (ADR-010). **Phase B** remains tenant-gated.
+- **Policy-driven retention enforcement**, now required to call the C9 legal-hold precedence decision before deletion and to event every deletion. Export/deletion follows. Decision Intelligence (C6) remains intentionally vacant (ADR-010). **Phase B** remains tenant-gated.
 
 ## Overall Blueprint Completion
 

@@ -14,7 +14,9 @@ public static class AuditModuleServiceCollectionExtensions
     public static IServiceCollection AddAuditModule(this IServiceCollection services)
     {
         services.AddSingleton<IPrivilegedAccessProjection, InMemoryPrivilegedAccessProjection>();
+        services.AddSingleton<ILegalHoldStore, InMemoryLegalHoldStore>();
         services.AddScoped<PrivilegedAccessService>();
+        services.AddScoped<LegalHoldService>();
         return services;
     }
 }

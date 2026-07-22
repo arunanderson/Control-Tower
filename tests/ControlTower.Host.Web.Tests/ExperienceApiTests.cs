@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ControlTower.Modules.Audit;
 using ControlTower.Modules.Ledger.Application;
 using ControlTower.Platform.Events;
 using ControlTower.Modules.Ledger.Domain;
@@ -192,6 +193,99 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
         await ClientFor(tenantA).GetAsync("/api/trust/coverage");
         Assert.Empty((await PrivilegedClient(tenantA).GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access"))!);
         Assert.Empty((await PrivilegedClient(tenantB).GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access"))!);
+    }
+
+    [Fact]
+    public async Task Legal_hold_protects_only_matching_retention_subjects_and_is_tenant_isolated()
+    {
+        var tenantA = Guid.NewGuid();
+        var client = ClientFor(tenantA);
+        client.DefaultRequestHeaders.Add("X-Operator", "legal@example.com");
+        var placed = await client.PostAsJsonAsync("/api/trust/legal-holds", new
+        {
+            dataClass = "UsageCostObservations",
+            resourceReference = "asset:42",
+            reason = "Regulatory inquiry",
+        });
+        Assert.Equal(HttpStatusCode.OK, placed.StatusCode);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var tenants = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+            using var _ = tenants.BeginScope(new TenantId(tenantA));
+            var service = scope.ServiceProvider.GetRequiredService<LegalHoldService>();
+            Assert.True(await service.IsProtectedAsync(
+                new RetentionSubject(RetentionDataClass.UsageCostObservations, "asset:42")));
+            Assert.False(await service.IsProtectedAsync(
+                new RetentionSubject(RetentionDataClass.UsageCostObservations, "asset:43")));
+            Assert.False(await service.IsProtectedAsync(
+                new RetentionSubject(RetentionDataClass.InventoryObservations, "asset:42")));
+        }
+
+        var otherTenant = await ClientFor(Guid.NewGuid()).GetFromJsonAsync<List<LegalHoldView>>("/api/trust/legal-holds");
+        Assert.Empty(otherTenant!);
+    }
+
+    [Fact]
+    public async Task Legal_hold_release_requires_approval_and_preserves_audited_history()
+    {
+        var tenant = Guid.NewGuid();
+        var client = ClientFor(tenant);
+        client.DefaultRequestHeaders.Add("X-Operator", "legal@example.com");
+        var placed = await client.PostAsJsonAsync("/api/trust/legal-holds", new
+        {
+            dataClass = "All",
+            reason = "Litigation",
+        });
+        var holdId = (await JsonDocument.ParseAsync(await placed.Content.ReadAsStreamAsync())).RootElement
+            .GetProperty("holdId").GetGuid();
+
+        var missingApproval = await client.PostAsJsonAsync($"/api/trust/legal-holds/{holdId}/release", new { reason = "Matter closed" });
+        Assert.Equal(HttpStatusCode.BadRequest, missingApproval.StatusCode);
+        client.DefaultRequestHeaders.Add("X-Approval-Reference", "approval:GC-104");
+        var released = await client.PostAsJsonAsync($"/api/trust/legal-holds/{holdId}/release", new { reason = "Matter closed" });
+        Assert.Equal(HttpStatusCode.OK, released.StatusCode);
+
+        var history = await client.GetFromJsonAsync<List<LegalHoldView>>("/api/trust/legal-holds");
+        var hold = Assert.Single(history!);
+        Assert.False(hold.IsActive);
+        Assert.Equal("approval:GC-104", hold.ApprovalReference);
+        Assert.Equal("Matter closed", hold.ReleaseReason);
+
+        using var scope = factory.Services.CreateScope();
+        var tenants = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+        using var _ = tenants.BeginScope(new TenantId(tenant));
+        var stream = await scope.ServiceProvider.GetRequiredService<IEventStore>().ReadAllAsync();
+        Assert.Contains(stream, e => System.Text.Encoding.UTF8.GetString(e.Payload).Contains("Regulatory", StringComparison.Ordinal) ||
+            System.Text.Encoding.UTF8.GetString(e.Payload).Contains("Litigation", StringComparison.Ordinal));
+        Assert.Contains(stream, e => System.Text.Encoding.UTF8.GetString(e.Payload).Contains("approval:GC-104", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Legal_hold_commands_require_an_authorised_operator_and_cross_tenant_release_is_hidden()
+    {
+        var missingOperator = await ClientFor(Guid.NewGuid()).PostAsJsonAsync("/api/trust/legal-holds", new
+        {
+            dataClass = "DomainEvents",
+            reason = "Investigation",
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, missingOperator.StatusCode);
+
+        var tenantA = ClientFor(Guid.NewGuid());
+        tenantA.DefaultRequestHeaders.Add("X-Operator", "legal@example.com");
+        var placed = await tenantA.PostAsJsonAsync("/api/trust/legal-holds", new
+        {
+            dataClass = "DomainEvents",
+            reason = "Investigation",
+        });
+        var holdId = (await JsonDocument.ParseAsync(await placed.Content.ReadAsStreamAsync())).RootElement
+            .GetProperty("holdId").GetGuid();
+        var tenantB = ClientFor(Guid.NewGuid());
+        tenantB.DefaultRequestHeaders.Add("X-Operator", "other@example.com");
+        tenantB.DefaultRequestHeaders.Add("X-Approval-Reference", "approval:1");
+        var response = await tenantB.PostAsJsonAsync($"/api/trust/legal-holds/{holdId}/release", new { reason = "Attempt" });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.DoesNotContain(holdId.ToString(), await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
