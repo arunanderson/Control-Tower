@@ -20,7 +20,9 @@ public static class ProvidersModuleServiceCollectionExtensions
             return registry;
         });
         services.AddSingleton<IWatermarkStore, InMemoryWatermarkStore>();
+        services.AddSingleton<IObservationStore, InMemoryObservationStore>();
         services.AddSingleton<ProviderDiagnostics>();
+        services.AddScoped<ObservationIngestionService>();
         return services;
     }
 }

@@ -8,8 +8,8 @@ project:
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
 current_phase: PHASE-6 # Provider Integration (C4); Phase A complete on main
 current_epic: EPIC-6-1 # Provider framework (C4.5) — Phase A
-current_task: P6-T01 # complete
-status: awaiting_tenant_gate # Phase B (Microsoft providers + Gate-1 PoCs) is a hard human gate
+current_task: P6-T02 # complete
+status: in_progress # C4 ingestion built tenant-independently; Phase B (Microsoft providers) remains a human gate (external dep)
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
 blocked:
@@ -100,6 +100,11 @@ tasks:
       title: "Provider Integration (C4.5) — provider framework, contracts, registry, harness, CSV provider (Phase A)",
       status: complete,
     }
+  - {
+      id: P6-T02,
+      title: "C4 observation ingestion — one door in (observe, privacy-mark, delta-suppress, append, emit ObservationIngested)",
+      status: complete,
+    }
   - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked }
 decisions:
   - { id: DEC-001, title: Database engine (Azure PostgreSQL), status: recorded }
@@ -118,8 +123,14 @@ merged_prs:
       number: 10,
       title: Provider Integration (C4.5) provider framework (Phase A),
     }
-open_prs: []
+open_prs:
+  - {
+      branch: phase-6/observation-ingestion,
+      title: "C4 observation ingestion (one door in)",
+      state: open,
+    }
 next_trains:
-  - "TENANT GATE (Phase B): execute Gate-1 PoC-1/2/3 and implement the Microsoft Graph/Copilot/Entra/PPAC providers behind the existing provider contracts — requires a provisioned M365 tenant, licences, admin consent, and sample archetypes (see docs/build/plans/PROVIDER-INTEGRATION-READINESS.md). Human gate: awaiting Arun."
-test_summary: "93 backend tests green (Platform 10, Ledger 13, Governance 17, Economics 16, Providers 13, Architecture 5, Host.Web 19) + 5 SPA (vitest); 0 vulnerable production packages"
-last_updated_by: P6-T01
+  - "C1 resolution segment: consume ObservationIngested -> deterministic identifier join -> AIAsset link / MergeCase -> confidence roll-up. Tenant-independent mechanism; the confidence RULE TABLE and alias types are PoC-gated (PoC-1/2) and stay provisional until the Microsoft tenant is provisioned. Includes host-composed cross-module event delivery (Providers never references Ledger)."
+  - "TENANT GATE (Phase B): execute Gate-1 PoC-1/2/3 and implement the Microsoft Graph/Copilot/Entra/PPAC providers behind the existing provider contracts (see docs/build/plans/PROVIDER-INTEGRATION-READINESS.md). Human gate; Microsoft dev-sandbox provisioning currently unavailable (external dependency)."
+test_summary: "100 backend tests green (Platform 10, Ledger 13, Governance 17, Economics 16, Providers 20, Architecture 5, Host.Web 19) + 5 SPA (vitest); 0 vulnerable production packages"
+last_updated_by: P6-T02
