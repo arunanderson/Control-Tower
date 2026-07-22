@@ -12,6 +12,24 @@ public interface IAssetRepository
     Task<AIAsset?> GetAsync(LedgerAssetId id, CancellationToken ct = default);
     Task SaveAsync(AIAsset asset, CancellationToken ct = default);
     Task<IReadOnlyList<AIAsset>> ListAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// The reverse alias lookup (the alias graph, ADR-012): assets that carry an <em>active</em> resolution
+    /// link containing this native identifier. Zero ⇒ no match; one ⇒ deterministic candidate; more than
+    /// one ⇒ an identifier collision that must not auto-link.
+    /// </summary>
+    Task<IReadOnlyList<AIAsset>> FindByNativeIdentifierAsync(NativeIdentifier identifier, CancellationToken ct = default);
+}
+
+/// <summary>Tenant-scoped store for the manual merge queue (Stage 5 E8). Production: PostgreSQL; dev: in-memory.</summary>
+public interface IMergeCaseStore
+{
+    Task SaveAsync(MergeCase mergeCase, CancellationToken ct = default);
+    Task<MergeCase?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<MergeCase>> OpenCasesAsync(CancellationToken ct = default);
+
+    /// <summary>An existing open case for the same identifier + observation — the basis for idempotent replay.</summary>
+    Task<MergeCase?> FindOpenForAsync(NativeIdentifier identifier, Guid? observationRef, CancellationToken ct = default);
 }
 
 /// <summary>The polymorphic ledger view row (the C7 read model; one shape for all asset types).</summary>

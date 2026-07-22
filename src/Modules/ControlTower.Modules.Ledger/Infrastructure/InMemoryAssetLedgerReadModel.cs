@@ -25,7 +25,7 @@ public sealed class InMemoryAssetLedgerReadModel(ITenantContextAccessor tenants)
             IsOwnerless = asset.IsOwnerless,
             OwnerDisplayName = owner,
             BusinessPurpose = asset.BusinessPurpose,
-            ResolutionLinkCount = asset.ResolutionLinks.Count,
+            ResolutionLinkCount = asset.ActiveResolutionLinks.Count, // honest: severed/superseded links don't count
         };
         lock (_gate)
         {

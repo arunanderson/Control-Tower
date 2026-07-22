@@ -52,6 +52,12 @@ public sealed class AIAsset
     public IReadOnlyList<OwnershipAssignment> Ownerships => _ownerships;
     public IReadOnlyList<ResolutionLink> ResolutionLinks => _links;
 
+    /// <summary>The material links — only active links contribute to identity and confidence roll-up.</summary>
+    public IReadOnlyList<ResolutionLink> ActiveResolutionLinks => _links.Where(l => l.IsActive).ToList();
+
+    /// <summary>The asset's slice of the alias graph: every alias on its active links (Stage 5 E5).</summary>
+    public IReadOnlyList<IdentityAlias> Aliases => ActiveResolutionLinks.SelectMany(l => l.Aliases).Distinct().ToList();
+
     /// <summary>No current Owner-role assignment — a first-class, queryable condition (Stage 1 §8.11).</summary>
     public bool IsOwnerless => !_ownerships.Any(o => o.IsCurrent && o.Role == OwnershipRole.Owner);
 
@@ -122,32 +128,72 @@ public sealed class AIAsset
         Raise(new OwnershipReassigned { AssetId = Id, From = from, To = to });
     }
 
-    public ResolutionLink AddResolutionLink(NativeIdentifierSet identifiers, MatchMethod method, MatchConfidence confidence, string linkedBy)
+    public ResolutionLink AddResolutionLink(NativeIdentifierSet identifiers, MatchMethod method, MatchConfidence confidence, string linkedBy, Guid? observationRef = null)
     {
-        var link = new ResolutionLink(identifiers, method, confidence, linkedBy, DateTimeOffset.UtcNow);
+        var link = new ResolutionLink(identifiers, method, confidence, linkedBy, DateTimeOffset.UtcNow, observationRef);
         _links.Add(link);
-        Raise(new ResolutionLinkAdded { AssetId = Id, LinkId = link.Id, LinkConfidence = confidence });
+        Raise(new ResolutionLinkAdded { AssetId = Id, LinkId = link.Id, LinkConfidence = confidence, ObservationRef = observationRef });
         RecomputeConfidence();
         return link;
     }
 
-    public void RemoveResolutionLink(Guid linkId)
+    /// <summary>True once an active link already points at this observation — the basis for idempotent replay.</summary>
+    public bool IsLinkedToObservation(Guid observationRef) =>
+        _links.Any(l => l.IsActive && l.ObservationRef == observationRef);
+
+    /// <summary>Sever a link (it no longer holds). The link is retained with status Severed — never deleted.</summary>
+    public void SeverResolutionLink(Guid linkId, string by, string reason)
     {
         var link = _links.FirstOrDefault(l => l.Id == linkId) ?? throw new DomainException("Resolution link not found.");
-        _links.Remove(link);
-        Raise(new ResolutionLinkRemoved { AssetId = Id, LinkId = linkId });
+        if (!link.IsActive) return;
+        link.Sever(DateTimeOffset.UtcNow);
+        Raise(new ResolutionLinkSevered { AssetId = Id, LinkId = linkId, By = by, Reason = reason });
         RecomputeConfidence();
     }
 
-    /// <summary>Provisional roll-up (strongest link wins) pending the Stage 5 PoC-gated confidence table (⛔PoC).</summary>
+    /// <summary>Mark a link superseded by a new link created on another asset (merge/split). Retained, never deleted.</summary>
+    public void SupersedeResolutionLink(Guid linkId, Guid supersedingLinkId, string by)
+    {
+        var link = _links.FirstOrDefault(l => l.Id == linkId) ?? throw new DomainException("Resolution link not found.");
+        if (!link.IsActive) return;
+        link.SupersedeWith(supersedingLinkId, DateTimeOffset.UtcNow);
+        Raise(new ResolutionLinkSuperseded { AssetId = Id, LinkId = linkId, BySupersedingLinkId = supersedingLinkId, By = by });
+        RecomputeConfidence();
+    }
+
+    /// <summary>This asset was merged into <paramref name="target"/> (its links have been superseded there).</summary>
+    public void MarkMergedInto(LedgerAssetId target, string by)
+    {
+        if (RegistrationStatus == RegistrationStatus.Retired)
+            throw new DomainException("A retired asset cannot be merged.");
+        RegistrationStatus = RegistrationStatus.Merged;
+        Raise(new AssetMergedInto { AssetId = Id, TargetAssetId = target, By = by });
+    }
+
+    /// <summary>Some of this asset's links were split out into <paramref name="newAsset"/>.</summary>
+    public void RecordSplit(LedgerAssetId newAsset, string by) =>
+        Raise(new AssetSplit { AssetId = Id, NewAssetId = newAsset, By = by });
+
+    /// <summary>
+    /// Roll up asset confidence as the weakest material link (ADR-024/025; Stage 5 §confidence): the lowest
+    /// graded confidence among active links wins, so a strong link never masks a weak one. Operator (Manual)
+    /// links are authoritative and do not weaken the roll-up. No active links ⇒ unresolved (Manual). The
+    /// per-link classification rule table itself is PoC-gated (PoC-1/2); this roll-up is not.
+    /// </summary>
     public static MatchConfidence RollUp(IEnumerable<MatchConfidence> confidences)
     {
         var list = confidences.ToList();
-        if (list.Contains(MatchConfidence.High)) return MatchConfidence.High;
-        if (list.Contains(MatchConfidence.Medium)) return MatchConfidence.Medium;
-        if (list.Contains(MatchConfidence.Low)) return MatchConfidence.Low;
-        return MatchConfidence.Manual;
+        return list.Count == 0 ? MatchConfidence.Manual : list.OrderBy(Rank).First();
     }
+
+    private static int Rank(MatchConfidence confidence) => confidence switch
+    {
+        MatchConfidence.Low => 0,
+        MatchConfidence.Medium => 1,
+        MatchConfidence.High => 2,
+        MatchConfidence.Manual => 3, // operator-approved: authoritative, never the weakest link
+        _ => 0,
+    };
 
     public IReadOnlyList<LedgerEvent> DequeueEvents()
     {
@@ -158,7 +204,7 @@ public sealed class AIAsset
 
     private void RecomputeConfidence()
     {
-        var next = RollUp(_links.Select(l => l.Confidence));
+        var next = RollUp(_links.Where(l => l.IsActive).Select(l => l.Confidence));
         if (next == MatchConfidence) return;
         var from = MatchConfidence;
         MatchConfidence = next;

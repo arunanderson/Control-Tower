@@ -1,6 +1,7 @@
 using ControlTower.Modules.Ledger.Application;
 using ControlTower.Modules.Ledger.Domain;
 using ControlTower.Modules.Ledger.Infrastructure;
+using ControlTower.Platform.Events;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ControlTower.Modules.Ledger;
@@ -19,7 +20,13 @@ public static class LedgerModuleServiceCollectionExtensions
         services.AddSingleton<IAssetLedgerReadModel, InMemoryAssetLedgerReadModel>();
         services.AddSingleton<ICoverageReadModel, InMemoryCoverageReadModel>();
         services.AddSingleton<ILedgerAuthorizer, AllowAllLedgerAuthorizer>();
+        services.AddSingleton<IMergeCaseStore, InMemoryMergeCaseStore>();
+        services.AddSingleton<IMatchClassifier, DeterministicMatchClassifier>();
         services.AddScoped<AssetRegistrationService>();
+        services.AddScoped<EntityResolutionService>();
+        // The C4→C1 seam: registered as an integration-event handler so the host (with an outbox
+        // dispatcher) delivers ObservationIngested to resolution. Providers is never referenced.
+        services.AddScoped<IIntegrationEventHandler, ObservationIngestedHandler>();
         return services;
     }
 }

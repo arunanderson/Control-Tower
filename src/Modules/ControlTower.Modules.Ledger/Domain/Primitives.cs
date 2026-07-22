@@ -61,6 +61,39 @@ public enum MatchMethod
     Manual,
 }
 
+/// <summary>
+/// Lifecycle of a resolution link (Stage 5 E6). Links are never deleted or rewritten: a link that no
+/// longer holds is <see cref="Severed"/>, and a link replaced by a merge/split is <see cref="Superseded"/>.
+/// Only <see cref="Active"/> links are material to confidence roll-up.
+/// </summary>
+public enum LinkStatus
+{
+    Active,
+    Severed,
+    Superseded,
+}
+
+/// <summary>Where an identity alias came from (Stage 5 E5). Observed aliases are provider-reported; operator/import are human-sourced.</summary>
+public enum AliasProvenance
+{
+    Observed,
+    Operator,
+    Import,
+}
+
+/// <summary>
+/// A provider-scoped identity alias (Stage 5 E5): a native identifier plus its provenance. Aliases are
+/// created from observations and carried on resolution links; the set of aliases across an asset's active
+/// links is its slice of the alias graph. Provider-specific alias TYPES (e.g. cross-surface joins) remain
+/// PoC-gated (PoC-1/2) — this record is the generic container, not a finalized Microsoft mapping.
+/// </summary>
+public sealed record IdentityAlias(string System, string IdentifierType, string Value, AliasProvenance Provenance)
+{
+    public static IdentityAlias Observed(NativeIdentifier id) => new(id.System, id.IdentifierType, id.Value, AliasProvenance.Observed);
+
+    public bool Matches(NativeIdentifier id) => id.System == System && id.IdentifierType == IdentifierType && id.Value == Value;
+}
+
 /// <summary>A taxonomy value (e.g. "agent"). Distinct types differ by taxonomy, not behaviour (Stage 4 §11.1).</summary>
 public readonly record struct AssetType
 {

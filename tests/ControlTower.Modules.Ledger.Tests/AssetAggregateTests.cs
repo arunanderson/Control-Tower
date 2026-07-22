@@ -92,21 +92,26 @@ public class AssetAggregateTests
     }
 
     [Fact]
-    public void Resolution_link_confidence_rolls_up_to_the_strongest_link()
+    public void Resolution_link_confidence_rolls_up_to_the_weakest_material_link()
     {
         var asset = Discover();
         Assert.Equal(MatchConfidence.Manual, asset.MatchConfidence);
 
-        asset.AddResolutionLink(NativeIdentifierSet.Of(new NativeIdentifier("ppac", "botId", "b1")),
+        var low = asset.AddResolutionLink(NativeIdentifierSet.Of(new NativeIdentifier("csv", "csv:key", "b1")),
             MatchMethod.Heuristic, MatchConfidence.Low, "system");
         Assert.Equal(MatchConfidence.Low, asset.MatchConfidence);
 
-        var high = asset.AddResolutionLink(NativeIdentifierSet.Of(new NativeIdentifier("graph", "appId", "a1")),
+        // A stronger link does NOT mask the weak one — lowest-confidence-wins (ADR-024/025).
+        asset.AddResolutionLink(NativeIdentifierSet.Of(new NativeIdentifier("csv", "csv:key", "a1")),
             MatchMethod.DocumentedJoin, MatchConfidence.High, "system");
-        Assert.Equal(MatchConfidence.High, asset.MatchConfidence);
-
-        asset.RemoveResolutionLink(high.Id);
         Assert.Equal(MatchConfidence.Low, asset.MatchConfidence);
+
+        // Sever (not delete) the weak link → the link is retained, and roll-up rises to High.
+        asset.SeverResolutionLink(low.Id, "system", "superseded by documented join");
+        Assert.Equal(MatchConfidence.High, asset.MatchConfidence);
+        Assert.Equal(2, asset.ResolutionLinks.Count); // severed link retained
+        Assert.Single(asset.ActiveResolutionLinks);
+        Assert.Contains(asset.ResolutionLinks, l => l.Id == low.Id && l.Status == LinkStatus.Severed);
     }
 
     [Fact]
