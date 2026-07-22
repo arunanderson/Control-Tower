@@ -18,6 +18,9 @@ public abstract record ProviderEvent : IDomainEvent
 public sealed record ObservationIngested : ProviderEvent
 {
     public required Guid ObservationId { get; init; }
+
+    /// <summary>The tenant the observation belongs to — carried so off-outbox delivery re-enters the right scope (ADR-021).</summary>
+    public required string Tenant { get; init; }
     public required string ConnectionRef { get; init; }
     public required string SurfaceId { get; init; }
     public required string Kind { get; init; }
@@ -31,4 +34,12 @@ public sealed record ObservationIngested : ProviderEvent
 
     public required string EvidenceLabel { get; init; }
     public required DateTimeOffset ObservedAt { get; init; }
+
+    /// <summary>
+    /// A provider-suggested descriptor for the resolution engine to name a newly-created asset (the engine
+    /// reconstructs identity from the event, never by reading the observation store — I3). Populated from
+    /// the generic well-known attributes "displayName"/"assetType" when present, else sensible fallbacks.
+    /// </summary>
+    public required string DisplayName { get; init; }
+    public required string AssetType { get; init; }
 }

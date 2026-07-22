@@ -90,9 +90,18 @@ public sealed class ObservationIngestionService(
                 ? raw.NativeIdentifiers[0]
                 : new NativeIdentifier(raw.SurfaceId, "(none)", string.Empty);
 
+            // Generic well-known attribute conventions — provider-agnostic, with fallbacks.
+            var displayName = raw.Attributes.TryGetValue("displayName", out var dn) && !string.IsNullOrWhiteSpace(dn)
+                ? dn
+                : (!string.IsNullOrWhiteSpace(primary.Value) ? primary.Value : raw.SurfaceId);
+            var assetType = raw.Attributes.TryGetValue("assetType", out var at) && !string.IsNullOrWhiteSpace(at)
+                ? at
+                : string.Empty;
+
             await EmitAsync(new ObservationIngested
             {
                 ObservationId = observation.ObservationId,
+                Tenant = tenant.ToString(),
                 ConnectionRef = observation.ConnectionRef,
                 SurfaceId = observation.SurfaceId,
                 Kind = observation.Kind.ToString(),
@@ -103,6 +112,8 @@ public sealed class ObservationIngestionService(
                 PrimaryIdentifierValue = primary.Value,
                 EvidenceLabel = observation.EvidenceLabel,
                 ObservedAt = observation.ObservedAt,
+                DisplayName = displayName,
+                AssetType = assetType,
             }, ct);
 
             if (delta == DeltaStatus.New) added++; else changed++;

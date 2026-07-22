@@ -47,6 +47,18 @@ public sealed class InMemoryAssetRepository(ITenantContextAccessor tenants) : IA
         }
     }
 
+    public Task<IReadOnlyList<AIAsset>> FindByNativeIdentifierAsync(NativeIdentifier identifier, CancellationToken ct = default)
+    {
+        var tenant = tenants.Current;
+        lock (_gate)
+        {
+            IReadOnlyList<AIAsset> result = Bucket(tenant).Values
+                .Where(a => a.ActiveResolutionLinks.Any(l => l.Identifiers.Identifiers.Any(i => i == identifier)))
+                .ToList();
+            return Task.FromResult(result);
+        }
+    }
+
     private Dictionary<LedgerAssetId, AIAsset> Bucket(TenantId tenant) =>
         _byTenant.TryGetValue(tenant, out var bucket) ? bucket : _byTenant[tenant] = [];
 }
