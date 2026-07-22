@@ -26,15 +26,15 @@ self-contained fact, Ledger projects it, and the Trust area reads only that proj
 
 ## Acceptance criteria to result
 
-| Criterion | Evidence | Result |
-|---|---|---|
-| Completed run emits one coverage fact | Provider ingestion tests; event + outbox assertions | PASS |
-| Failed acquisition records degraded fact before rethrow | `Failed_acquisition_records_and_emits_degraded_coverage_before_rethrowing` | PASS |
-| Tenant-isolated, replay-idempotent projection | `CoverageProjectionTests` | PASS |
-| Freshness from declared expectation + last successful sweep | coverage projection tests and read model | PASS |
-| Honest empty state | `No_runs_is_an_explicit_unknown_coverage_state`; Trust SPA test | PASS |
-| I3/I4 and module boundaries preserved | 5 architecture tests green; no module references added | PASS |
-| No new context/aggregate/Microsoft assumption | existing C4, C1.6, C7 only; generic event contract | PASS |
+| Criterion                                                   | Evidence                                                                   | Result |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------- | ------ |
+| Completed run emits one coverage fact                       | Provider ingestion tests; event + outbox assertions                        | PASS   |
+| Failed acquisition records degraded fact before rethrow     | `Failed_acquisition_records_and_emits_degraded_coverage_before_rethrowing` | PASS   |
+| Tenant-isolated, replay-idempotent projection               | `CoverageProjectionTests`                                                  | PASS   |
+| Freshness from declared expectation + last successful sweep | coverage projection tests and read model                                   | PASS   |
+| Honest empty state                                          | `No_runs_is_an_explicit_unknown_coverage_state`; Trust SPA test            | PASS   |
+| I3/I4 and module boundaries preserved                       | 5 architecture tests green; no module references added                     | PASS   |
+| No new context/aggregate/Microsoft assumption               | existing C4, C1.6, C7 only; generic event contract                         | PASS   |
 
 ## Commands run and raw results
 

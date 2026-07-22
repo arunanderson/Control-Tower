@@ -6,7 +6,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | ----------------- | ------------------------------------------------------------------------------------------------------- |
 | **Current phase** | Phase 6 — Provider Integration (C4)                                                                     |
 | **Current epic**  | C4→C1→C7 pipeline (ingestion + resolution + workbench) built tenant-independently; Phase B stays gated  |
-| **Current task**  | P6-T05 complete — honest C1.6 coverage/freshness from actual C4 ingestion runs                         |
+| **Current task**  | P6-T05 complete — honest C1.6 coverage/freshness from actual C4 ingestion runs                          |
 | **Overall state** | **Building tenant-independent C4/C1 work; Microsoft providers await the tenant (external dependency).** |
 | **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report; emergent-first  |
 | **Last updated**  | 2026-07-22                                                                                              |
@@ -54,7 +54,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | Entity Resolution     | Complete    | Deterministic match / MergeCase / lowest-wins / merge-split; MS rules PoC-gated (#12) |
 | Governance (C2)       | Complete    | Cases, tiered approvals, waivers, retirement, reuse, debt (#8)                        |
 | Economics (C3)        | Complete    | One model, many ROI read models; evidence on every figure (#7)                        |
-| Experience (C7)       | Complete    | Five areas + Asset Record (#9); Resolution Workbench (#13); live coverage projection |
+| Experience (C7)       | Complete    | Five areas + Asset Record (#9); Resolution Workbench (#13); live coverage projection  |
 | Decision Intelligence | Not Started | C6 intentionally vacant (ADR-010) — no separate context planned                       |
 | Provider Integrations | Blocked     | Microsoft Graph/Copilot/Entra/PPAC providers — need the tenant (Phase B)              |
 | Microsoft PoCs        | Blocked     | Gate-1 PoC-1/2/3 — need the tenant; Wave 0 provisioning externally unavailable        |
