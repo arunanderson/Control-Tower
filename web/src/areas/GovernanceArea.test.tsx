@@ -18,7 +18,14 @@ const cases: GovernanceCaseView[] = [
   },
 ];
 
-const debt: GovernanceDebtView[] = [{ assetId: "a2", debtType: "Ownerless", raisedAt: "2026-07-17T00:00:00Z", isOpen: true }];
+const debt: GovernanceDebtView[] = [
+  {
+    assetId: "a2",
+    debtType: "Ownerless",
+    raisedAt: "2026-07-17T00:00:00Z",
+    isOpen: true,
+  },
+];
 
 test("the workbench shows recommendation outcome, SLA breach and governance debt", () => {
   render(<GovernanceArea cases={cases} debt={debt} />);

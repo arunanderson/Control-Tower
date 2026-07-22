@@ -16,7 +16,11 @@ export function AssetRecord({ asset }: { asset: AssetLedgerView }) {
         <dd data-testid="match-confidence">{asset.matchConfidence}</dd>
         <dt>Owner</dt>
         <dd data-testid="owner">
-          {asset.isOwnerless ? <strong data-testid="ownerless">Ownerless</strong> : asset.ownerDisplayName}
+          {asset.isOwnerless ? (
+            <strong data-testid="ownerless">Ownerless</strong>
+          ) : (
+            asset.ownerDisplayName
+          )}
         </dd>
         <dt>Business purpose</dt>
         <dd>{asset.businessPurpose ?? "—"}</dd>
@@ -52,7 +56,11 @@ export function PortfolioArea({
         </thead>
         <tbody>
           {assets.map((a) => (
-            <tr key={a.assetId} data-testid="asset-row" onClick={() => onSelect(a.assetId)}>
+            <tr
+              key={a.assetId}
+              data-testid="asset-row"
+              onClick={() => onSelect(a.assetId)}
+            >
               <td>{a.displayName}</td>
               <td>{a.assetType}</td>
               <td>{a.registrationStatus}</td>

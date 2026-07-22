@@ -6,6 +6,7 @@ import type {
   ExecutiveEconomicsView,
   GovernanceCaseView,
   GovernanceDebtView,
+  MergeCaseView,
   RoiView,
 } from "./api/types";
 import { ExecutiveDashboard } from "./areas/ExecutiveDashboard";
@@ -13,10 +14,18 @@ import { PortfolioArea } from "./areas/PortfolioArea";
 import { EconomicsArea } from "./areas/EconomicsArea";
 import { GovernanceArea } from "./areas/GovernanceArea";
 import { TrustArea } from "./areas/TrustArea";
+import { ResolutionWorkbench } from "./areas/ResolutionWorkbench";
 import { AdministrationArea } from "./areas/AdministrationArea";
 
-type Area = "Portfolio" | "Economics" | "Governance" | "Trust" | "Administration";
-const AREAS: Area[] = ["Portfolio", "Economics", "Governance", "Trust", "Administration"];
+type Area =
+  "Portfolio" | "Economics" | "Governance" | "Trust" | "Administration";
+const AREAS: Area[] = [
+  "Portfolio",
+  "Economics",
+  "Governance",
+  "Trust",
+  "Administration",
+];
 
 function devTenantId(): string {
   const key = "ct-dev-tenant";
@@ -36,6 +45,7 @@ interface Loaded {
   cases: GovernanceCaseView[];
   debt: GovernanceDebtView[];
   coverage: CoverageView;
+  mergeCases: MergeCaseView[];
 }
 
 export function App() {
@@ -54,12 +64,40 @@ export function App() {
       api.getGovernanceCases(),
       api.getGovernanceDebt(),
       api.getCoverage(),
+      api.getMergeCases(),
     ])
-      .then(([assets, executive, portfolio, departments, cases, debt, coverage]) =>
-        setData({ assets, executive, portfolio, departments, cases, debt, coverage }),
+      .then(
+        ([
+          assets,
+          executive,
+          portfolio,
+          departments,
+          cases,
+          debt,
+          coverage,
+          mergeCases,
+        ]) =>
+          setData({
+            assets,
+            executive,
+            portfolio,
+            departments,
+            cases,
+            debt,
+            coverage,
+            mergeCases,
+          }),
       )
       .catch((e) => setError(String(e)));
   }, [api]);
+
+  const resolveMergeCase = (id: string, outcome: string) => {
+    api
+      .resolveMergeCase(id, outcome)
+      .then(() => api.getMergeCases())
+      .then((mergeCases) => setData((d) => (d ? { ...d, mergeCases } : d)))
+      .catch((e) => setError(String(e)));
+  };
 
   return (
     <main>
@@ -67,7 +105,11 @@ export function App() {
         <h1>Enterprise AI Control Tower</h1>
         <nav>
           {AREAS.map((a) => (
-            <button key={a} onClick={() => setArea(a)} aria-current={area === a}>
+            <button
+              key={a}
+              onClick={() => setArea(a)}
+              aria-current={area === a}
+            >
               {a}
             </button>
           ))}
@@ -80,14 +122,35 @@ export function App() {
       {data && area === "Portfolio" && (
         <>
           <ExecutiveDashboard view={data.executive} />
-          <PortfolioArea assets={data.assets} selectedId={selectedAsset} onSelect={setSelectedAsset} />
+          <PortfolioArea
+            assets={data.assets}
+            selectedId={selectedAsset}
+            onSelect={setSelectedAsset}
+          />
         </>
       )}
-      {data && area === "Economics" && <EconomicsArea portfolio={data.portfolio} departments={data.departments} />}
-      {data && area === "Governance" && <GovernanceArea cases={data.cases} debt={data.debt} />}
-      {data && area === "Trust" && <TrustArea coverage={data.coverage} />}
+      {data && area === "Economics" && (
+        <EconomicsArea
+          portfolio={data.portfolio}
+          departments={data.departments}
+        />
+      )}
+      {data && area === "Governance" && (
+        <GovernanceArea cases={data.cases} debt={data.debt} />
+      )}
+      {data && area === "Trust" && (
+        <>
+          <TrustArea coverage={data.coverage} />
+          <ResolutionWorkbench
+            mergeCases={data.mergeCases}
+            onResolve={resolveMergeCase}
+          />
+        </>
+      )}
       {data && area === "Administration" && (
-        <AdministrationArea summary={{ tenant: devTenantId(), areas: AREAS, readModelOnly: true }} />
+        <AdministrationArea
+          summary={{ tenant: devTenantId(), areas: AREAS, readModelOnly: true }}
+        />
       )}
     </main>
   );

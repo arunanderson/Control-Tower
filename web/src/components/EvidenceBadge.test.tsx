@@ -15,8 +15,12 @@ const amount: EconomicAmount = {
 test("an amount is never shown without its evidence fields", () => {
   render(<EvidenceBadge amount={amount} />);
   expect(screen.getByTestId("evidence-class")).toHaveTextContent("Measured");
-  expect(screen.getByTestId("validation-state")).toHaveTextContent("SystemObserved");
+  expect(screen.getByTestId("validation-state")).toHaveTextContent(
+    "SystemObserved",
+  );
   expect(screen.getByTestId("methodology")).toHaveTextContent("billing meter");
-  expect(screen.getByTestId("source")).toHaveTextContent("Azure Cost Management");
+  expect(screen.getByTestId("source")).toHaveTextContent(
+    "Azure Cost Management",
+  );
   expect(screen.getByTestId("as-of")).toHaveTextContent("2026-07-17");
 });

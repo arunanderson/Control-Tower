@@ -79,3 +79,47 @@ export interface CoverageView {
   coverageNote: string;
   asOf: string;
 }
+
+// Resolution & Merge Workbench read models (I4). Display only — no calculation, no domain objects.
+export interface IdentifierView {
+  system: string;
+  identifierType: string;
+  value: string;
+}
+
+export interface MergeCaseView {
+  mergeCaseId: string;
+  reason: string;
+  confidence: string;
+  identifiers: IdentifierView[];
+  candidateAssetIds: string[];
+  observationRef?: string | null;
+  openedAt: string;
+}
+
+export interface AliasView {
+  system: string;
+  identifierType: string;
+  value: string;
+  provenance: string;
+}
+
+export interface ResolutionLinkView {
+  linkId: string;
+  identifiers: IdentifierView[];
+  method: string;
+  confidence: string;
+  status: string;
+  observationRef?: string | null;
+  linkedBy: string;
+  linkedAt: string;
+  supersededByLinkId?: string | null;
+}
+
+export interface AssetResolutionView {
+  assetId: string;
+  displayName: string;
+  matchConfidence: string;
+  aliases: AliasView[];
+  links: ResolutionLinkView[];
+}

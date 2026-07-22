@@ -24,6 +24,7 @@ public static class LedgerModuleServiceCollectionExtensions
         services.AddSingleton<IMatchClassifier, DeterministicMatchClassifier>();
         services.AddScoped<AssetRegistrationService>();
         services.AddScoped<EntityResolutionService>();
+        services.AddScoped<ResolutionWorkbenchReadModel>();
         // The C4→C1 seam: registered as an integration-event handler so the host (with an outbox
         // dispatcher) delivers ObservationIngested to resolution. Providers is never referenced.
         services.AddScoped<IIntegrationEventHandler, ObservationIngestedHandler>();

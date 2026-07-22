@@ -1,6 +1,12 @@
 import type { GovernanceCaseView, GovernanceDebtView } from "../api/types";
 
-export function GovernanceArea({ cases, debt }: { cases: GovernanceCaseView[]; debt: GovernanceDebtView[] }) {
+export function GovernanceArea({
+  cases,
+  debt,
+}: {
+  cases: GovernanceCaseView[];
+  debt: GovernanceDebtView[];
+}) {
   return (
     <section>
       <h2>Governance</h2>
@@ -24,7 +30,13 @@ export function GovernanceArea({ cases, debt }: { cases: GovernanceCaseView[]; d
               <td>{c.riskTier}</td>
               <td>{c.status}</td>
               <td>{c.requiredReviewers.join(", ") || "auto"}</td>
-              <td>{c.slaBreached ? <strong data-testid="sla-breach">SLA breached</strong> : "on time"}</td>
+              <td>
+                {c.slaBreached ? (
+                  <strong data-testid="sla-breach">SLA breached</strong>
+                ) : (
+                  "on time"
+                )}
+              </td>
               <td data-testid="case-outcome">
                 {c.reuseAction ? `reuse: ${c.reuseAction}` : (c.outcome ?? "—")}
               </td>

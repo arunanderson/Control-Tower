@@ -3,7 +3,15 @@ import { EconomicsArea } from "./EconomicsArea";
 import type { EconomicAmount, RoiView } from "../api/types";
 
 function amt(value: number, cls: string): EconomicAmount {
-  return { amount: value, currency: "EUR", evidenceClass: cls, source: "s", methodology: "m", asOf: "2026-07-17T00:00:00Z", validationState: "SystemObserved" };
+  return {
+    amount: value,
+    currency: "EUR",
+    evidenceClass: cls,
+    source: "s",
+    methodology: "m",
+    asOf: "2026-07-17T00:00:00Z",
+    validationState: "SystemObserved",
+  };
 }
 
 const suppressed: RoiView = {

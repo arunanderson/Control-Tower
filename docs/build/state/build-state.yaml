@@ -8,8 +8,8 @@ project:
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
 current_phase: PHASE-6 # Provider Integration (C4); Phase A complete on main
 current_epic: EPIC-6-1 # Provider framework (C4.5) — Phase A
-current_task: P6-T03 # complete
-status: in_progress # C4→C1 pipeline built tenant-independently; Phase B (Microsoft providers + PoC-gated rules) remains a human gate (external dep)
+current_task: P6-T04 # complete
+status: in_progress # C4→C1→C7 pipeline built tenant-independently; Phase B (Microsoft providers + PoC-gated rules) remains a human gate (external dep)
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
 blocked:
@@ -110,6 +110,11 @@ tasks:
       title: "C1 entity resolution — consume ObservationIngested, deterministic match, links/MergeCase, lowest-wins roll-up, merge/split",
       status: complete,
     }
+  - {
+      id: P6-T04,
+      title: "Resolution & Merge Workbench (C7) — read-model APIs for aliases/links/merge-cases + operator actions",
+      status: complete,
+    }
   - { id: P0-T16, title: Execute PoC-1/2/3, status: blocked }
 decisions:
   - { id: DEC-001, title: Database engine (Azure PostgreSQL), status: recorded }
@@ -129,14 +134,15 @@ merged_prs:
       title: Provider Integration (C4.5) provider framework (Phase A),
     }
   - { number: 11, title: C4 observation ingestion (one door in) }
+  - { number: 12, title: C1 entity resolution (consume ObservationIngested) }
 open_prs:
   - {
-      branch: phase-6/entity-resolution,
-      title: "C1 entity resolution (consume ObservationIngested)",
+      branch: phase-6/resolution-workbench,
+      title: "Resolution & Merge Workbench (C7)",
       state: open,
     }
 next_trains:
-  - "Next tenant-independent capability from the implementation handoff package (e.g. a C7 resolution/merge-case workbench surface over the new read models, or the privileged-read audit surfacing). Continue until a genuine human gate."
+  - "Next tenant-independent capability from the implementation handoff package. Candidates surviving audit: enrich C1.6 coverage/freshness from real IngestionRun data; privileged-read audit surfacing (C9/ADR-021); provider sync scheduler/worker loop. Decision Intelligence (C6) is intentionally vacant (ADR-010). Continue until a genuine human gate."
   - "TENANT GATE (Phase B): execute Gate-1 PoC-1/2/3 and implement the Microsoft Graph/Copilot/Entra/PPAC providers behind the existing provider contracts, and finalize the PoC-gated confidence rule table + alias types (see docs/build/plans/PROVIDER-INTEGRATION-READINESS.md). Human gate; Microsoft dev-sandbox provisioning currently unavailable (external dependency)."
-test_summary: "111 backend tests green (Platform 10, Ledger 24, Governance 17, Economics 16, Providers 20, Architecture 5, Host.Web 19) + 5 SPA (vitest); 0 vulnerable production packages"
-last_updated_by: P6-T03
+test_summary: "116 backend tests green (Platform 10, Ledger 24, Governance 17, Economics 16, Providers 20, Architecture 5, Host.Web 24) + 8 SPA (vitest); 0 vulnerable production packages"
+last_updated_by: P6-T04
