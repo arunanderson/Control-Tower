@@ -19,6 +19,8 @@ fail if the kernel or any module depends on an adapter.
 | `InMemoryGovernanceStore`            | `IGovernanceStore`            | Azure Database for PostgreSQL (DEC-001)                                                  | `AddGovernanceModule`, Development only  | implemented |
 | `InMemoryWatermarkStore`             | `IWatermarkStore`             | Azure Database for PostgreSQL (sync watermarks) (DEC-001)                                | `AddProviderFramework`, Development only | implemented |
 | `InMemoryObservationStore`           | `IObservationStore`           | Azure Database for PostgreSQL — append-only observation partitions (DEC-001)             | `AddProviderFramework`, Development only | implemented |
+| `InMemoryProviderConnectionStore`    | `IProviderConnectionStore`    | Azure Database for PostgreSQL + RLS (credential references only)                         | `AddProviderFramework`, Development only | implemented |
+| `InMemoryProviderJobReceiptStore`    | `IProviderJobReceiptStore`    | Azure Service Bus delivery state + PostgreSQL idempotency receipt                        | `AddProviderFramework`, Development only | implemented |
 | `InMemoryMergeCaseStore`             | `IMergeCaseStore`             | Azure Database for PostgreSQL (DEC-001)                                                  | `AddLedgerModule`, Development only      | implemented |
 | Local Docker PostgreSQL              | `IDataStore` (future)         | Azure Database for PostgreSQL Flexible Server (DEC-001)                                  | not yet wired                            | planned     |
 

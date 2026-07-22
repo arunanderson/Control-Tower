@@ -5,8 +5,8 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | Field             | Value                                                                                                   |
 | ----------------- | ------------------------------------------------------------------------------------------------------- |
 | **Current phase** | Phase 6 — Provider Integration (C4)                                                                     |
-| **Current epic**  | Tenant-independent provider-to-experience pipeline plus C9 trust surfacing; Phase B stays gated         |
-| **Current task**  | P6-T06 complete — privileged-read enforcement, immutable audit event, customer-visible Trust log        |
+| **Current epic**  | Tenant-independent C4 pipeline including queued sweep-job worker execution; Phase B stays gated         |
+| **Current task**  | P6-T07 complete — secret-free sweep request and idempotent worker execution                             |
 | **Overall state** | **Building tenant-independent C4/C1 work; Microsoft providers await the tenant (external dependency).** |
 | **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report; emergent-first  |
 | **Last updated**  | 2026-07-22                                                                                              |
@@ -20,7 +20,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## In progress (current merge train)
 
-- **C9 privileged-read audit (P6-T06) — tenant-independent:** reuses the existing `IPrivilegedReadAuditor`; explicit C7 endpoint marking requires actor + purpose, emits a hash-chained audit event, and projects a tenant-isolated customer-visible Trust log. Current L1 views remain unmarked. **123 backend + 10 SPA tests green**.
+- **C4 provider sweep jobs (P6-T07) — tenant-independent:** secret-free tenant job enters the hash-chained event store and outbox; the worker resolves the configured provider and calls the established ingestion pipeline. Completed replay is idempotent; failure releases for bounded Service Bus retry/DLQ. No in-process durable scheduler. **126 backend + 10 SPA tests green**; 0 vulnerable production packages.
 
 ## Blocked (TENANT GATE — Phase B, external dependency)
 
@@ -33,7 +33,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Test status
 
-- Backend: **123 tests green** (Platform 10, Ledger 27, Governance 17, Economics 16, Providers 21, Architecture 5, Host.Web 27); build 0/0. SPA: **10 vitest green**; `npm run build` clean; production dependencies 0 vulnerabilities.
+- Backend: **126 tests green** (Platform 10, Ledger 27, Governance 17, Economics 16, Providers 24, Architecture 5, Host.Web 27); build 0/0. SPA: **10 vitest green**; `npm run build` clean; production dependencies 0 vulnerabilities.
 
 ## Deployment status
 
@@ -41,7 +41,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Next autonomous train
 
-- **Next tenant-independent capability from the implementation handoff package** — a **provider sync scheduler** worker loop or enterprise-readiness foundations (legal hold, export/deletion, snapshot freeze, retention) that need no production credentials. Decision Intelligence (C6) is intentionally vacant (ADR-010). **Phase B** remains tenant-gated.
+- **Next tenant-independent capability from the implementation handoff package** — enterprise-readiness foundations (legal hold, export/deletion, snapshot freeze, retention) that need no production credentials. Decision Intelligence (C6) is intentionally vacant (ADR-010). **Phase B** remains tenant-gated.
 
 ## Overall Blueprint Completion
 
