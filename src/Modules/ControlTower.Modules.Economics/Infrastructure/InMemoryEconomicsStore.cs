@@ -12,6 +12,8 @@ public sealed class InMemoryEconomicsStore(ITenantContextAccessor tenants) : IEc
         public List<CostObservation> Costs { get; } = [];
         public List<UsageObservation> Usage { get; } = [];
         public Dictionary<Guid, ValueDeclaration> Declarations { get; } = [];
+        public Dictionary<Guid, ReportingPeriod> Periods { get; } = [];
+        public List<ReportSnapshot> Snapshots { get; } = [];
     }
 
     private readonly Dictionary<TenantId, Bucket> _byTenant = [];
@@ -67,6 +69,51 @@ public sealed class InMemoryEconomicsStore(ITenantContextAccessor tenants) : IEc
             BucketFor(tenant).Declarations.TryGetValue(id, out var declaration);
             return Task.FromResult(declaration);
         }
+    }
+
+    public Task SavePeriodAsync(ReportingPeriod period, CancellationToken ct = default)
+    {
+        var tenant = tenants.Current;
+        if (period.Tenant != tenant) throw new InvalidOperationException("Cross-tenant reporting period write rejected.");
+        lock (_gate) BucketFor(tenant).Periods[period.Id] = period;
+        return Task.CompletedTask;
+    }
+
+    public Task AppendSnapshotAsync(ReportSnapshot snapshot, CancellationToken ct = default)
+    {
+        var tenant = tenants.Current;
+        if (snapshot.Tenant != tenant) throw new InvalidOperationException("Cross-tenant report snapshot write rejected.");
+        lock (_gate)
+        {
+            var snapshots = BucketFor(tenant).Snapshots;
+            if (snapshots.Any(x => x.Id == snapshot.Id || (x.PeriodId == snapshot.PeriodId && x.Version == snapshot.Version)))
+                throw new EconomicsException("Report snapshot identity and version must be unique.");
+            snapshots.Add(snapshot);
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<ReportingPeriod>> PeriodsAsync(CancellationToken ct = default)
+    {
+        var tenant = tenants.Current;
+        lock (_gate) return Task.FromResult<IReadOnlyList<ReportingPeriod>>(BucketFor(tenant).Periods.Values.OrderBy(x => x.Start).ToList());
+    }
+
+    public Task<ReportingPeriod?> GetPeriodAsync(Guid id, CancellationToken ct = default)
+    {
+        var tenant = tenants.Current;
+        lock (_gate)
+        {
+            BucketFor(tenant).Periods.TryGetValue(id, out var period);
+            return Task.FromResult(period);
+        }
+    }
+
+    public Task<IReadOnlyList<ReportSnapshot>> SnapshotsAsync(Guid periodId, CancellationToken ct = default)
+    {
+        var tenant = tenants.Current;
+        lock (_gate)
+            return Task.FromResult<IReadOnlyList<ReportSnapshot>>(BucketFor(tenant).Snapshots.Where(x => x.PeriodId == periodId).OrderBy(x => x.Version).ToList());
     }
 
     private Bucket BucketFor(TenantId tenant) =>

@@ -1,4 +1,5 @@
 using ControlTower.Modules.Economics.Application;
+using ControlTower.Modules.Economics.Domain;
 using ControlTower.Modules.Audit;
 using ControlTower.Modules.Governance.Application;
 using ControlTower.Modules.Ledger.Application;
@@ -43,6 +44,7 @@ public static class ExperienceApi
         api.MapGet("/economics/portfolio", async (EconomicsProjectionService e) => Results.Ok(await e.PortfolioRoiAsync(DateTimeOffset.UtcNow)));
         api.MapGet("/economics/departments", async (EconomicsProjectionService e) => Results.Ok(await e.DepartmentRoiAsync(DateTimeOffset.UtcNow)));
         api.MapGet("/economics/agents", async (EconomicsProjectionService e) => Results.Ok(await e.AgentRoiAsync(DateTimeOffset.UtcNow)));
+        MapReportingPeriods(api);
 
         // Governance workbench.
         api.MapGet("/governance/cases", async (GovernanceService g) => Results.Ok(await g.CasesAsync(DateTimeOffset.UtcNow)));
@@ -74,6 +76,32 @@ public static class ExperienceApi
         api.MapGet("/admin/providers", (IProviderRegistry registry) => Results.Ok(registry.Discover()));
 
         MapResolutionWorkbench(api);
+    }
+
+    /// <summary>Reporting-period commands and immutable C3 snapshot read models (ADR-016).</summary>
+    private static void MapReportingPeriods(RouteGroupBuilder api)
+    {
+        api.MapGet("/economics/reporting-periods", async (ReportingSnapshotService service) =>
+            Results.Ok(await service.PeriodsAsync()));
+        api.MapGet("/economics/reporting-periods/{id:guid}/snapshots", (Guid id, ReportingSnapshotService service) =>
+            EconomicsGuard(() => service.SnapshotsAsync(id)));
+
+        api.MapPost("/economics/reporting-periods", (CreateReportingPeriodRequest request, ReportingSnapshotService service, HttpContext http) =>
+            EconomicsGuard(async () =>
+            {
+                _ = RequiredOperator(http);
+                return new { periodId = await service.CreatePeriodAsync(request.Start, request.End) };
+            }));
+        api.MapPost("/economics/reporting-periods/{id:guid}/closing", (Guid id, ReportingSnapshotService service, HttpContext http) =>
+            EconomicsGuard(async () =>
+            {
+                _ = RequiredOperator(http);
+                await service.BeginClosingAsync(id);
+            }));
+        api.MapPost("/economics/reporting-periods/{id:guid}/freeze", (Guid id, SnapshotRequest request, ReportingSnapshotService service, HttpContext http) =>
+            EconomicsGuard(() => service.FreezeAsync(id, request.PayloadJson, request.InputBasis, RequiredOperator(http))));
+        api.MapPost("/economics/reporting-periods/{id:guid}/restate", (Guid id, RestatementRequest request, ReportingSnapshotService service, HttpContext http) =>
+            EconomicsGuard(() => service.RestateAsync(id, request.PayloadJson, request.InputBasis, RequiredOperator(http), request.Reason)));
     }
 
     /// <summary>
@@ -123,6 +151,23 @@ public static class ExperienceApi
             ? op.ToString()
             : "operator";
 
+    private static string RequiredOperator(HttpContext http) =>
+        http.Request.Headers.TryGetValue("X-Operator", out var op) && !string.IsNullOrWhiteSpace(op)
+            ? op.ToString()
+            : throw new EconomicsException("X-Operator is required for reporting-period commands.");
+
+    private static async Task<IResult> EconomicsGuard(Func<Task> action)
+    {
+        try { await action(); return Results.Ok(new { ok = true }); }
+        catch (EconomicsException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    }
+
+    private static async Task<IResult> EconomicsGuard<T>(Func<Task<T>> action)
+    {
+        try { return Results.Ok(await action()); }
+        catch (EconomicsException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    }
+
     private static async Task<IResult> Guard(Func<Task> action)
     {
         try { await action(); return Results.Ok(new { ok = true }); }
@@ -139,4 +184,7 @@ public static class ExperienceApi
     private sealed record SplitRequest(Guid AssetId, IReadOnlyList<Guid> LinkIds, string NewDisplayName, string NewAssetType);
     private sealed record ManualLinkRequest(Guid AssetId, string System, string IdentifierType, string Value, Guid? ObservationRef);
     private sealed record ResolveMergeCaseRequest(string Outcome);
+    private sealed record CreateReportingPeriodRequest(DateTimeOffset Start, DateTimeOffset End);
+    private sealed record SnapshotRequest(string PayloadJson, ReportInputBasis InputBasis);
+    private sealed record RestatementRequest(string PayloadJson, ReportInputBasis InputBasis, string Reason);
 }

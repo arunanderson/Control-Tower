@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ControlTower.Modules.Ledger.Application;
 using ControlTower.Platform.Events;
@@ -67,6 +68,74 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
         Assert.Contains("methodology", body);
         Assert.Contains("asOf", body);
         Assert.Contains("validationState", body);
+    }
+
+    [Fact]
+    public async Task Reporting_period_api_exposes_signed_freeze_and_immutable_restatement_history()
+    {
+        var client = ClientFor(Guid.NewGuid());
+        client.DefaultRequestHeaders.Add("X-Operator", "finance@example.com");
+        var create = await client.PostAsJsonAsync("/api/economics/reporting-periods", new
+        {
+            start = "2026-06-01T00:00:00Z",
+            end = "2026-07-01T00:00:00Z",
+        });
+        Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        var periodId = (await JsonDocument.ParseAsync(await create.Content.ReadAsStreamAsync())).RootElement
+            .GetProperty("periodId").GetGuid();
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.PostAsJsonAsync($"/api/economics/reporting-periods/{periodId}/closing", new { })).StatusCode);
+        var basis = new
+        {
+            asOf = "2026-06-30T23:59:59Z",
+            sourceReferences = new[] { "economics@2026-06-30" },
+            ruleVersionReferences = new[] { "allocation:7" },
+            organisationModelVersion = "org:12",
+            observationWatermark = "observation:100",
+        };
+        var freeze = await client.PostAsJsonAsync($"/api/economics/reporting-periods/{periodId}/freeze", new
+        {
+            payloadJson = "{\"totalSpend\":125.50}",
+            inputBasis = basis,
+        });
+        Assert.Equal(HttpStatusCode.OK, freeze.StatusCode);
+        var firstBody = await freeze.Content.ReadAsStringAsync();
+        Assert.Contains("finance@example.com", firstBody);
+
+        var restate = await client.PostAsJsonAsync($"/api/economics/reporting-periods/{periodId}/restate", new
+        {
+            payloadJson = "{\"totalSpend\":127.00}",
+            inputBasis = new
+            {
+                basis.asOf,
+                basis.sourceReferences,
+                basis.ruleVersionReferences,
+                basis.organisationModelVersion,
+                observationWatermark = "observation:104",
+            },
+            reason = "Late invoice",
+        });
+        Assert.Equal(HttpStatusCode.OK, restate.StatusCode);
+
+        var history = await client.GetStringAsync($"/api/economics/reporting-periods/{periodId}/snapshots");
+        using var document = JsonDocument.Parse(history);
+        Assert.Equal(2, document.RootElement.GetArrayLength());
+        Assert.Equal(1, document.RootElement[0].GetProperty("version").GetInt32());
+        Assert.Equal("{\"totalSpend\":125.50}", document.RootElement[0].GetProperty("payloadJson").GetString());
+        Assert.Equal(2, document.RootElement[1].GetProperty("version").GetInt32());
+        Assert.Equal("Late invoice", document.RootElement[1].GetProperty("restatementReason").GetString());
+    }
+
+    [Fact]
+    public async Task Reporting_period_commands_require_an_operator()
+    {
+        var response = await ClientFor(Guid.NewGuid()).PostAsJsonAsync("/api/economics/reporting-periods", new
+        {
+            start = "2026-06-01T00:00:00Z",
+            end = "2026-07-01T00:00:00Z",
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
