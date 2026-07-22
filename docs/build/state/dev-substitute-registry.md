@@ -17,6 +17,7 @@ fail if the kernel or any module depends on an adapter.
 | `InMemoryEconomicsStore`        | `IEconomicsStore`        | Azure Database for PostgreSQL (DEC-001)                                                  | `AddEconomicsModule`, Development only   | implemented |
 | `InMemoryGovernanceStore`       | `IGovernanceStore`       | Azure Database for PostgreSQL (DEC-001)                                                  | `AddGovernanceModule`, Development only  | implemented |
 | `InMemoryWatermarkStore`        | `IWatermarkStore`        | Azure Database for PostgreSQL (sync watermarks) (DEC-001)                                | `AddProviderFramework`, Development only | implemented |
+| `InMemoryObservationStore`      | `IObservationStore`      | Azure Database for PostgreSQL — append-only observation partitions (DEC-001)             | `AddProviderFramework`, Development only | implemented |
 | Local Docker PostgreSQL         | `IDataStore` (future)    | Azure Database for PostgreSQL Flexible Server (DEC-001)                                  | not yet wired                            | planned     |
 
 Rules: standard SQL only (DEC-001); no provider SDK in the domain; swappable by configuration; never

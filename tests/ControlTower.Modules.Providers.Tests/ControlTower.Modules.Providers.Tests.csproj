@@ -29,6 +29,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Modules\ControlTower.Modules.Providers\ControlTower.Modules.Providers.csproj" />
     <ProjectReference Include="..\..\src\ControlTower.Platform\ControlTower.Platform.csproj" />
+    <ProjectReference Include="..\..\src\Adapters\ControlTower.Adapters.InMemory\ControlTower.Adapters.InMemory.csproj" />
   </ItemGroup>
 
 </Project>

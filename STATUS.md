@@ -2,15 +2,15 @@
 
 _Single source of build truth. Updated by the build agent as part of every task's Document step._
 
-| Field             | Value                                                                                                  |
-| ----------------- | ------------------------------------------------------------------------------------------------------ |
-| **Current phase** | Phase 6 — Provider Integration (C4)                                                                    |
-| **Current epic**  | Provider framework (C4.5) Phase A merged (#10); Phase B stops at the Microsoft-tenant gate             |
-| **Current task**  | P6-T01 complete                                                                                        |
-| **Overall state** | **Phase A merged-ready. Phase B (Microsoft providers + Gate-1 PoCs) STOPS at the tenant gate.**        |
-| **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report; emergent-first |
-| **Last updated**  | 2026-07-17                                                                                             |
-| **Updated by**    | Claude Code (build agent)                                                                              |
+| Field             | Value                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| **Current phase** | Phase 6 — Provider Integration (C4)                                                                     |
+| **Current epic**  | C4 ingestion (the one door in) built tenant-independently; Phase B (Microsoft providers) stays gated    |
+| **Current task**  | P6-T02 complete (PR open)                                                                               |
+| **Overall state** | **Building tenant-independent C4/C1 work; Microsoft providers await the tenant (external dependency).** |
+| **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report; emergent-first  |
+| **Last updated**  | 2026-07-22                                                                                              |
+| **Updated by**    | Claude Code (build agent)                                                                               |
 
 ## Completed & merged on `main`
 
@@ -19,20 +19,20 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## In progress (PR open)
 
-- None. All tenant-independent trains are merged.
+- **C4 observation ingestion (the "one door in"), P6-T02 — tenant-independent:** the C4 invariant pipeline (ADR-009/020) that turns provider `RawObservation`s into **immutable, append-only, pre-resolution** `ProviderObservation`s — contract-validate → **privacy Gate 1 (L1, set once)** → **delta-suppress** (watermark) → append → emit **`ObservationIngested`** to the hash-chained stream + outbox. Append-only `IObservationStore` (+ `IngestionRun` log), dev-only in-memory substitute. **Proven end-to-end with the manual CSV provider** (identical re-sweep fully suppressed; changed attribute recorded as Changed; each append emits one event + one outbox message), tenant-scoped, no ledger read/write (I3). Stops exactly at the event boundary. **100 backend tests green**; 0 vulnerable production packages. Merge Readiness Report on the PR.
 
-## Blocked (TENANT GATE — Phase B)
+## Blocked (TENANT GATE — Phase B, external dependency)
 
-- **Phase B — Microsoft providers + Gate-1 PoC execution:** STOPPED at the human gate. Requires a provisioned M365 tenant, licences, admin consent, and sample agent archetypes. The full provisioning list, Gate-1 execution plan, validation criteria, estimated time, and rollback are in **`docs/build/plans/PROVIDER-INTEGRATION-READINESS.md`**. No Microsoft/Graph/Copilot/Entra code exists and no permissions were requested.
+- **Phase B — Microsoft providers + Gate-1 PoC execution:** a human gate. Requires a provisioned M365 tenant, licences, admin consent, and sample agent archetypes (full list + Gate-1 plan + rollback in **`docs/build/plans/PROVIDER-INTEGRATION-READINESS.md`**). **Wave 0** (zero-cost validation) is the next human step; a **Microsoft dev sandbox** was chosen but **could not be provisioned — Microsoft's provisioning service is currently unavailable** (external dependency, not a project blocker). No Microsoft/Graph/Copilot/Entra code exists and no permissions were requested.
 
 ## Required Arun actions
 
-- **Provision the Gate-1 Microsoft tenant** (permissions, Entra app registration, licences, admin consent, sample archetypes, test users) per `PROVIDER-INTEGRATION-READINESS.md` — unblocks Phase B.
+- **Retry Wave 0 provisioning** when Microsoft's service is back (dev sandbox → the three zero-cost checks), then return the results per the readiness plan.
 - **Branch protection + CODEOWNERS enforcement + `production` environment** (manual GitHub config) — recommended.
 
 ## Test status
 
-- Backend: **93 tests green** (Platform 10, Ledger 13, Governance 17, Economics 16, Providers 13, Architecture 5, Host.Web 19); build 0/0. SPA: **5 vitest green**; `npm run build` clean; production deps 0 vulns.
+- Backend: **100 tests green** (Platform 10, Ledger 13, Governance 17, Economics 16, Providers 20, Architecture 5, Host.Web 19); build 0/0. SPA: **5 vitest green**; `npm run build` clean; production deps 0 vulns.
 
 ## Deployment status
 
@@ -40,4 +40,4 @@ _Single source of build truth. Updated by the build agent as part of every task'
 
 ## Next autonomous train
 
-- **None without the tenant.** All tenant-independent priorities (1–6 Phase A) are implemented. The next step — **Phase B (Gate-1 PoCs + Microsoft providers behind the existing contracts)** — is a **hard human gate** awaiting tenant provisioning. On provisioning, execution proceeds autonomously per the readiness plan; no blueprint change.
+- **C1 resolution segment** (tenant-independent mechanism): consume `ObservationIngested` → deterministic identifier join → `AIAsset` link / MergeCase → confidence roll-up, with **host-composed cross-module event delivery** (Providers never references Ledger). The **confidence rule table and alias types are PoC-gated (PoC-1/2)** and stay provisional until the Microsoft tenant is provisioned — the mechanism is built and proven with the CSV path; the Microsoft-specific join rules wait for Gate-1. Then **Phase B** on tenant availability.
