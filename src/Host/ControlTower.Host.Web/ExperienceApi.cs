@@ -63,6 +63,7 @@ public static class ExperienceApi
                     x.CorrelationId,
                 })))
             .AuditPrivilegedRead("trust.privileged-access-log");
+        MapLegalHolds(api);
 
         // Administration summary.
         api.MapGet("/admin/summary", (ITenantContextAccessor tenants) => Results.Ok(new
@@ -76,6 +77,31 @@ public static class ExperienceApi
         api.MapGet("/admin/providers", (IProviderRegistry registry) => Results.Ok(registry.Discover()));
 
         MapResolutionWorkbench(api);
+    }
+
+    /// <summary>C9 legal-hold lifecycle; active matching holds take precedence over retention.</summary>
+    private static void MapLegalHolds(RouteGroupBuilder api)
+    {
+        api.MapGet("/trust/legal-holds", async (LegalHoldService service) => Results.Ok(await service.ListAsync()));
+        api.MapPost("/trust/legal-holds", (PlaceLegalHoldRequest request, LegalHoldService service, HttpContext http) =>
+            LegalHoldGuard(async () =>
+            {
+                if (!Enum.TryParse<RetentionDataClass>(request.DataClass, true, out var dataClass))
+                    throw new LegalHoldException("Unknown retention data class.");
+                return new
+                {
+                    holdId = await service.PlaceAsync(
+                        new LegalHoldScope(dataClass, request.ResourceReference),
+                        request.Reason,
+                        RequiredLegalHoldOperator(http)),
+                };
+            }));
+        api.MapPost("/trust/legal-holds/{id:guid}/release", (Guid id, ReleaseLegalHoldRequest request, LegalHoldService service, HttpContext http) =>
+            LegalHoldGuard(() => service.ReleaseAsync(
+                id,
+                RequiredLegalHoldOperator(http),
+                request.Reason,
+                RequiredApprovalReference(http))));
     }
 
     /// <summary>Reporting-period commands and immutable C3 snapshot read models (ADR-016).</summary>
@@ -156,6 +182,28 @@ public static class ExperienceApi
             ? op.ToString()
             : throw new EconomicsException("X-Operator is required for reporting-period commands.");
 
+    private static string RequiredLegalHoldOperator(HttpContext http) =>
+        http.Request.Headers.TryGetValue("X-Operator", out var op) && !string.IsNullOrWhiteSpace(op)
+            ? op.ToString()
+            : throw new LegalHoldException("X-Operator is required for legal-hold commands.");
+
+    private static string RequiredApprovalReference(HttpContext http) =>
+        http.Request.Headers.TryGetValue("X-Approval-Reference", out var approval) && !string.IsNullOrWhiteSpace(approval)
+            ? approval.ToString()
+            : throw new LegalHoldException("X-Approval-Reference is required to release a legal hold.");
+
+    private static async Task<IResult> LegalHoldGuard(Func<Task> action)
+    {
+        try { await action(); return Results.Ok(new { ok = true }); }
+        catch (LegalHoldException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    }
+
+    private static async Task<IResult> LegalHoldGuard<T>(Func<Task<T>> action)
+    {
+        try { return Results.Ok(await action()); }
+        catch (LegalHoldException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    }
+
     private static async Task<IResult> EconomicsGuard(Func<Task> action)
     {
         try { await action(); return Results.Ok(new { ok = true }); }
@@ -187,4 +235,6 @@ public static class ExperienceApi
     private sealed record CreateReportingPeriodRequest(DateTimeOffset Start, DateTimeOffset End);
     private sealed record SnapshotRequest(string PayloadJson, ReportInputBasis InputBasis);
     private sealed record RestatementRequest(string PayloadJson, ReportInputBasis InputBasis, string Reason);
+    private sealed record PlaceLegalHoldRequest(string DataClass, string? ResourceReference, string Reason);
+    private sealed record ReleaseLegalHoldRequest(string Reason);
 }
