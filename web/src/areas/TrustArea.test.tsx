@@ -10,6 +10,7 @@ test("coverage is reported honestly, including no providers and no sweep", () =>
     coverageNote:
       "No provider connections yet — inventory is manual-registration only.",
     asOf: "2026-07-17T00:00:00Z",
+    surfaces: [],
   };
   render(<TrustArea coverage={coverage} />);
   expect(screen.getByTestId("providers-connected")).toHaveTextContent("0");
@@ -17,4 +18,30 @@ test("coverage is reported honestly, including no providers and no sweep", () =>
   expect(screen.getByTestId("coverage-note")).toHaveTextContent(
     "manual-registration only",
   );
+});
+
+test("provider surfaces expose state, freshness, and evidenced capabilities", () => {
+  const coverage: CoverageView = {
+    providersConnected: 1,
+    assetsKnown: 2,
+    lastSuccessfulSweep: "2026-07-22T12:00:00Z",
+    coverageNote: "Coverage is evidenced by 1 provider connection(s).",
+    asOf: "2026-07-22T12:01:00Z",
+    surfaces: [{
+      connectionRef: "conn-1",
+      surfaceId: "manual-csv",
+      coveredCapabilities: ["Inventory"],
+      state: "Connected",
+      isFresh: true,
+      lastSuccessfulSweep: "2026-07-22T12:00:00Z",
+      observed: 2,
+      new: 2,
+      changed: 0,
+      suppressed: 0,
+    }],
+  };
+  render(<TrustArea coverage={coverage} />);
+  expect(screen.getByLabelText("Provider coverage")).toHaveTextContent("manual-csv");
+  expect(screen.getByLabelText("Provider coverage")).toHaveTextContent("fresh");
+  expect(screen.getByLabelText("Provider coverage")).toHaveTextContent("Inventory");
 });
