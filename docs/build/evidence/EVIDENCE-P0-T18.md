@@ -82,7 +82,7 @@ Three read-only audits independently confirmed:
 
 ## CI run link
 
-Pending PR creation.
+https://github.com/arunanderson/Control-Tower/pull/21/checks
 
 ## Reviewer notes
 

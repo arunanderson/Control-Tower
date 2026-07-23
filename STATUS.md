@@ -38,7 +38,8 @@ PRs #1–#18 delivered the build rails, modular host, in-memory development foun
 (C1), Economics (C3), Governance (C2), Experience (C7), provider framework and CSV provider (C4),
 observation ingestion, entity resolution, resolution workbench, coverage/freshness, privileged-read
 audit, provider sweep jobs, reporting snapshots and legal holds. PR #19 reconciled the build record.
-PR #20 recorded the Microsoft sandbox readiness findings.
+PR #20 recorded the Microsoft sandbox readiness findings. PR #21 records the enterprise-observability
+scope amendment and production delivery plan.
 
 These are **implemented development slices**, not evidence that the production SaaS is finished.
 

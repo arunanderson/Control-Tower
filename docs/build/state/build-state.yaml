@@ -209,6 +209,10 @@ merged_prs:
       title: Reconcile build state after enterprise-control merge trains,
     }
   - { number: 20, title: Record Microsoft sandbox Gate-1 readiness findings }
+  - {
+      number: 21,
+      title: Rebaseline V1 enterprise observability and production delivery,
+    }
 open_prs: []
 next_trains:
   - "Production foundation: Entra authentication, role/purpose authorisation, C8/C5 telemetry policy, privacy Gate 2, adversarial tenant-isolation tests and policy-as-of Gate 1."
