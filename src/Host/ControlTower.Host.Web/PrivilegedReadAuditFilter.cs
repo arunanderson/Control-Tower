@@ -1,4 +1,5 @@
 using ControlTower.Modules.Audit;
+using ControlTower.Host.Web.Authentication;
 
 namespace ControlTower.Host.Web;
 
@@ -8,16 +9,15 @@ public sealed class PrivilegedReadAuditFilter(PrivilegedReadRequirement requirem
 {
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        var request = context.HttpContext.Request;
-        var actor = request.Headers["X-Actor"].ToString();
-        var purpose = request.Headers["X-Purpose"].ToString();
-        if (string.IsNullOrWhiteSpace(actor) || string.IsNullOrWhiteSpace(purpose))
-            return Results.BadRequest(new { error = "privileged reads require X-Actor and X-Purpose" });
+        var http = context.HttpContext;
+        var actor = AuthenticatedHumanContext.Require(http).CanonicalActor;
+        if (!RequestBusinessContext.TryGetPurpose(http, out var purpose))
+            return Results.BadRequest(new { error = "privileged reads require a valid X-Purpose" });
 
         var result = await next(context);
-        var audit = context.HttpContext.RequestServices.GetRequiredService<PrivilegedAccessService>();
+        var audit = http.RequestServices.GetRequiredService<PrivilegedAccessService>();
         await audit.RecordReadAsync(actor, purpose, requirement.Resource,
-            context.HttpContext.TraceIdentifier, context.HttpContext.RequestAborted);
+            http.TraceIdentifier, http.RequestAborted);
         return result;
     }
 }

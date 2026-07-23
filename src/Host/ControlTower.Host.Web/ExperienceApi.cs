@@ -5,6 +5,7 @@ using ControlTower.Modules.Governance.Application;
 using ControlTower.Modules.Ledger.Application;
 using ControlTower.Modules.Ledger.Domain;
 using ControlTower.Modules.Providers.Application;
+using ControlTower.Host.Web.Authentication;
 using ControlTower.Platform.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,7 +21,8 @@ public static class ExperienceApi
 {
     public static void MapExperienceApi(this WebApplication app)
     {
-        var api = app.MapGroup("/api");
+        var api = app.MapGroup("/api")
+            .RequireAuthorization();
 
         // Tenant gate for the whole API surface.
         api.AddEndpointFilter(async (context, next) =>
@@ -28,7 +30,7 @@ public static class ExperienceApi
             var tenants = context.HttpContext.RequestServices.GetRequiredService<ITenantContextAccessor>();
             return tenants.HasTenant
                 ? await next(context)
-                : Results.BadRequest(new { error = "tenant context required" });
+                : Results.Unauthorized();
         });
 
         // Portfolio + the single polymorphic Asset Record.
@@ -173,24 +175,19 @@ public static class ExperienceApi
     }
 
     private static string Operator(HttpContext http) =>
-        http.Request.Headers.TryGetValue("X-Operator", out var op) && !string.IsNullOrWhiteSpace(op)
-            ? op.ToString()
-            : "operator";
+        AuthenticatedHumanContext.Require(http).CanonicalActor;
 
     private static string RequiredOperator(HttpContext http) =>
-        http.Request.Headers.TryGetValue("X-Operator", out var op) && !string.IsNullOrWhiteSpace(op)
-            ? op.ToString()
-            : throw new EconomicsException("X-Operator is required for reporting-period commands.");
+        AuthenticatedHumanContext.Require(http).CanonicalActor;
 
     private static string RequiredLegalHoldOperator(HttpContext http) =>
-        http.Request.Headers.TryGetValue("X-Operator", out var op) && !string.IsNullOrWhiteSpace(op)
-            ? op.ToString()
-            : throw new LegalHoldException("X-Operator is required for legal-hold commands.");
+        AuthenticatedHumanContext.Require(http).CanonicalActor;
 
     private static string RequiredApprovalReference(HttpContext http) =>
-        http.Request.Headers.TryGetValue("X-Approval-Reference", out var approval) && !string.IsNullOrWhiteSpace(approval)
-            ? approval.ToString()
-            : throw new LegalHoldException("X-Approval-Reference is required to release a legal hold.");
+        RequestBusinessContext.TryGetApprovalReference(http, out var approval)
+            ? approval
+            : throw new LegalHoldException(
+                "A valid X-Approval-Reference is required to release a legal hold.");
 
     private static async Task<IResult> LegalHoldGuard(Func<Task> action)
     {

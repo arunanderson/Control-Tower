@@ -5,8 +5,8 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | Field               | Value                                                                                                        |
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Current phase**   | Phase 1 — production security, privacy and durable-data foundation                                           |
-| **Current task**    | P0-T18 — enterprise observability V1 rebaseline                                                              |
-| **Overall state**   | **Development capability slices are green; the production product remains materially incomplete.**           |
+| **Current task**    | P1-T02 — trusted Entra tenant and human actor request boundary                                               |
+| **Overall state**   | **Trusted HTTP identity is green; the production product remains materially incomplete.**                    |
 | **Product outcome** | One role-appropriate Control Tower for all technically observable AI use across the corporate-managed estate |
 | **Merge policy**    | Merge trains — agent may merge tenant-independent green PRs with a Merge Readiness Report                    |
 | **Last updated**    | 2026-07-23                                                                                                   |
@@ -39,9 +39,29 @@ PRs #1–#18 delivered the build rails, modular host, in-memory development foun
 observation ingestion, entity resolution, resolution workbench, coverage/freshness, privileged-read
 audit, provider sweep jobs, reporting snapshots and legal holds. PR #19 reconciled the build record.
 PR #20 recorded the Microsoft sandbox readiness findings. PR #21 records the enterprise-observability
-scope amendment and production delivery plan.
+scope amendment and production delivery plan. PR #22 establishes the trusted Entra tenant and human
+actor request boundary.
 
 These are **implemented development slices**, not evidence that the production SaaS is finished.
+
+## Current production-foundation train
+
+P1-T02 replaces the caller-controlled HTTP tenant and actor headers with a cryptographically
+validated human request boundary:
+
+- the ASP.NET Core bearer handler validates signature, exact API audience, lifetime and a strict
+  Entra v2 tenant issuer;
+- Microsoft's supported signing-key issuer validator binds tenant-independent OIDC JWK metadata to
+  the token issuer and tenant;
+- exactly one non-empty `tid`, `oid` and `sub` plus the configured delegated scope are required;
+- an external directory tenant maps one-to-one through a server-side allowlist to the internal
+  `TenantId`;
+- the canonical audit actor is `entra:{tid}:{oid}` and cannot be replaced by request headers;
+- `/health` and `/ready` are the only anonymous endpoints; development command APIs remain absent
+  from Production until role/capability authorisation exists.
+
+The boundary is tenant-independent and locally proven with ephemeral signing material. Connecting
+it to a real tenant still requires production app registration values and tenant onboarding.
 
 ## Microsoft sandbox evidence
 
@@ -57,7 +77,8 @@ Microsoft Agent 365 is not a dependency for the Control Tower. It is one optiona
 
 ## Production gaps on the critical path
 
-- Entra federation authentication, production role/scope/purpose authorisation and JIT staff access.
+- Production role/capability/org-scope authorisation, SPA bearer integration, JIT staff access and
+  production Entra app/onboarding configuration.
 - C8 telemetry-policy history, C5 jurisdiction/population resolution and universal privacy Gate 2.
 - Policy-as-of storage refusal at Gate 1; the current development ingestion path must not be used for
   endpoint telemetry until this is complete.
@@ -76,10 +97,10 @@ Microsoft Agent 365 is not a dependency for the Control Tower. It is one optiona
 
 Production identity/privacy foundation:
 
-1. federation authentication and role/purpose authorisation;
-2. unforgeable tenant context attack tests;
-3. telemetry-policy and jurisdiction ports;
-4. read-time Gate 2 plus policy-as-of Gate 1 storage refusal;
+1. role/capability/org-scope authorisation and SPA bearer integration;
+2. telemetry-policy and jurisdiction ports;
+3. read-time Gate 2 plus policy-as-of Gate 1 storage refusal;
+4. adversarial isolation tests spanning authentication, authorisation and privacy;
 5. durable PostgreSQL/RLS and transactional outbox work after those boundaries are test-enforced.
 
 Endpoint or browser events will not be onboarded before the privacy boundary is real.
@@ -99,7 +120,7 @@ Endpoint or browser events will not be onboarded before the privacy boundary is 
 
 | Capability                  | Current maturity                         | Production closure                                                                      |
 | --------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------- |
-| Platform foundation         | Development slice green                  | Entra, RLS, durable adapters, IaC, observability and DR                                 |
+| Platform foundation         | Entra JWT human boundary green           | Role/org authorisation, RLS, durable adapters, IaC, observability and DR                |
 | Asset Ledger (C1)           | Domain and in-memory workflow green      | Durable repository, production authorisation and real-source validation                 |
 | Economics (C3)              | Domain and snapshot workflow green       | Currency-safe aggregation, production rate cards/providers and durable projections      |
 | Governance (C2)             | Domain workflow green                    | Durable workflow, authorisation, notifications/control adapters and production policy   |

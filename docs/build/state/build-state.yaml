@@ -7,9 +7,9 @@ project:
   name: Enterprise AI Control Tower
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
 current_phase: PHASE-1 # return to the production foundation critical path; later domain slices exist in development form
-current_epic: EPIC-0-1 # product/build truth rebaseline before the next code train
-current_task: P0-T18 # enterprise observability V1 rebaseline
-status: in_progress # P0-T18 closes the scope record; production readiness remains materially incomplete
+current_epic: EPIC-1-2 # production security, privacy and durable-data foundation
+current_task: P1-T02 # trusted Entra tenant and human actor request boundary
+status: in_progress # trusted HTTP identity is complete; production readiness remains materially incomplete
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
 product_outcome:
@@ -58,7 +58,7 @@ epics:
   - {
       id: EPIC-1-2,
       title: "Production security, privacy and durable data foundation",
-      status: planned,
+      status: in_progress,
     }
   - { id: EPIC-2-1, title: "AI Asset Ledger (C1)", status: complete }
   - { id: EPIC-3-1, title: "Cost & Value Intelligence (C3)", status: complete }
@@ -90,6 +90,11 @@ tasks:
   - {
       id: P1-T01,
       title: Host composition + tenancy middleware + dispatcher + dev adapters,
+      status: complete,
+    }
+  - {
+      id: P1-T02,
+      title: "Trusted Entra tenant and human actor request boundary",
       status: complete,
     }
   - {
@@ -213,12 +218,13 @@ merged_prs:
       number: 21,
       title: Rebaseline V1 enterprise observability and production delivery,
     }
+  - { number: 22, title: Trusted Entra tenant and human actor request boundary }
 open_prs: []
 next_trains:
-  - "Production foundation: Entra authentication, role/purpose authorisation, C8/C5 telemetry policy, privacy Gate 2, adversarial tenant-isolation tests and policy-as-of Gate 1."
+  - "Production foundation: role/capability/org-scope authorisation, SPA bearer integration, C8/C5 telemetry policy, privacy Gate 2, adversarial tenant-isolation tests and policy-as-of Gate 1."
   - "Durable truth: Azure PostgreSQL/RLS, transactional event/outbox persistence, tenant watermarks/receipts, Service Bus, Key Vault and Blob/WORM adapters."
   - "Enterprise acquisition through C4: Microsoft/Purview/Defender, identity/network/SaaS/cloud/API providers, then tenant-bound browser and endpoint collectors under DEV-002."
   - "P5-T04 retention mechanism remains behind an authoritative versioned Legal-owned jurisdiction-policy provider; production policy values are a human gate."
   - "P0-T16 rerun requires representative agent archetypes and an Agent 365 licence; current sandbox findings are informative but inconclusive."
-test_summary: "135 backend tests green (Platform 10, Ledger 27, Governance 17, Economics 20, Providers 24, Architecture 5, Host.Web 32) + 10 SPA (vitest); 0 vulnerable production packages"
-last_updated_by: P0-T18
+test_summary: "151 backend tests green (Platform 10, Ledger 27, Governance 17, Economics 20, Providers 24, Architecture 5, Host.Web 48) + 10 SPA (vitest); 0 vulnerable production packages"
+last_updated_by: P1-T02

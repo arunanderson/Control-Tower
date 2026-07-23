@@ -10,26 +10,16 @@ using ControlTower.Modules.Ledger.Application;
 using ControlTower.Platform.Events;
 using ControlTower.Modules.Ledger.Domain;
 using ControlTower.Platform.Tenancy;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace ControlTower.Host.Web.Tests;
 
-/// <summary>Runs the host in Development so the Experience API (backed by dev module wiring) is mapped.</summary>
-public sealed class DevWebFactory : WebApplicationFactory<Program>
-{
-    protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.UseEnvironment("Development");
-}
-
-public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFactory>
+public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<LocalJwtWebFactory>
 {
     private HttpClient TenantClient()
     {
-        var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", Guid.NewGuid().ToString());
-        return client;
+        return factory.AuthenticatedClient(Guid.NewGuid());
     }
 
     [Theory]
@@ -41,7 +31,7 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
     public async Task Api_requires_a_tenant(string path)
     {
         var response = await factory.CreateClient().GetAsync(path);
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Theory]
@@ -74,8 +64,11 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
     [Fact]
     public async Task Reporting_period_api_exposes_signed_freeze_and_immutable_restatement_history()
     {
-        var client = ClientFor(Guid.NewGuid());
-        client.DefaultRequestHeaders.Add("X-Operator", "finance@example.com");
+        var tenant = Guid.NewGuid();
+        var objectId = Guid.NewGuid();
+        var client = ClientFor(tenant, objectId);
+        client.DefaultRequestHeaders.Add("X-Operator", "forged@example.com");
+        var canonicalActor = $"entra:{tenant:D}:{objectId:D}";
         var create = await client.PostAsJsonAsync("/api/economics/reporting-periods", new
         {
             start = "2026-06-01T00:00:00Z",
@@ -102,7 +95,8 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
         });
         Assert.Equal(HttpStatusCode.OK, freeze.StatusCode);
         var firstBody = await freeze.Content.ReadAsStringAsync();
-        Assert.Contains("finance@example.com", firstBody);
+        Assert.Contains(canonicalActor, firstBody);
+        Assert.DoesNotContain("forged@example.com", firstBody);
 
         var restate = await client.PostAsJsonAsync($"/api/economics/reporting-periods/{periodId}/restate", new
         {
@@ -129,14 +123,14 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
     }
 
     [Fact]
-    public async Task Reporting_period_commands_require_an_operator()
+    public async Task Reporting_period_commands_require_authentication()
     {
-        var response = await ClientFor(Guid.NewGuid()).PostAsJsonAsync("/api/economics/reporting-periods", new
+        var response = await factory.CreateClient().PostAsJsonAsync("/api/economics/reporting-periods", new
         {
             start = "2026-06-01T00:00:00Z",
             end = "2026-07-01T00:00:00Z",
         });
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
@@ -147,10 +141,13 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
         Assert.Contains("coverageNote", body);
     }
 
-    private HttpClient PrivilegedClient(Guid tenant, string actor = "alex", string purpose = "Support investigation")
+    private HttpClient PrivilegedClient(
+        Guid tenant,
+        Guid? objectId = null,
+        string purpose = "Support investigation")
     {
-        var client = ClientFor(tenant);
-        client.DefaultRequestHeaders.Add("X-Actor", actor);
+        var client = ClientFor(tenant, objectId);
+        client.DefaultRequestHeaders.Add("X-Actor", "forged-actor");
         client.DefaultRequestHeaders.Add("X-Purpose", purpose);
         return client;
     }
@@ -168,12 +165,14 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
     public async Task Privileged_log_read_is_recorded_immutably_and_visible_on_the_next_read()
     {
         var tenant = Guid.NewGuid();
-        var client = PrivilegedClient(tenant);
+        var objectId = Guid.NewGuid();
+        var client = PrivilegedClient(tenant, objectId);
         Assert.Empty((await client.GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access"))!);
 
         var records = await client.GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access");
         var record = Assert.Single(records!);
-        Assert.Equal("alex", record.Actor);
+        Assert.Equal($"entra:{tenant:D}:{objectId:D}", record.Actor);
+        Assert.NotEqual("forged-actor", record.Actor);
         Assert.Equal("Support investigation", record.Purpose);
         Assert.Equal("trust.privileged-access-log", record.Resource);
         Assert.False(string.IsNullOrWhiteSpace(record.CorrelationId));
@@ -199,8 +198,9 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
     public async Task Legal_hold_protects_only_matching_retention_subjects_and_is_tenant_isolated()
     {
         var tenantA = Guid.NewGuid();
-        var client = ClientFor(tenantA);
-        client.DefaultRequestHeaders.Add("X-Operator", "legal@example.com");
+        var objectId = Guid.NewGuid();
+        var client = ClientFor(tenantA, objectId);
+        client.DefaultRequestHeaders.Add("X-Operator", "forged@example.com");
         var placed = await client.PostAsJsonAsync("/api/trust/legal-holds", new
         {
             dataClass = "UsageCostObservations",
@@ -208,6 +208,8 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
             reason = "Regulatory inquiry",
         });
         Assert.Equal(HttpStatusCode.OK, placed.StatusCode);
+        var holds = await client.GetFromJsonAsync<List<LegalHoldView>>("/api/trust/legal-holds");
+        Assert.Equal($"entra:{tenantA:D}:{objectId:D}", Assert.Single(holds!).PlacedBy);
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -230,8 +232,8 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
     public async Task Legal_hold_release_requires_approval_and_preserves_audited_history()
     {
         var tenant = Guid.NewGuid();
-        var client = ClientFor(tenant);
-        client.DefaultRequestHeaders.Add("X-Operator", "legal@example.com");
+        var objectId = Guid.NewGuid();
+        var client = ClientFor(tenant, objectId);
         var placed = await client.PostAsJsonAsync("/api/trust/legal-holds", new
         {
             dataClass = "All",
@@ -249,6 +251,8 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
         var history = await client.GetFromJsonAsync<List<LegalHoldView>>("/api/trust/legal-holds");
         var hold = Assert.Single(history!);
         Assert.False(hold.IsActive);
+        Assert.Equal($"entra:{tenant:D}:{objectId:D}", hold.PlacedBy);
+        Assert.Equal($"entra:{tenant:D}:{objectId:D}", hold.ReleasedBy);
         Assert.Equal("approval:GC-104", hold.ApprovalReference);
         Assert.Equal("Matter closed", hold.ReleaseReason);
 
@@ -262,17 +266,16 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
     }
 
     [Fact]
-    public async Task Legal_hold_commands_require_an_authorised_operator_and_cross_tenant_release_is_hidden()
+    public async Task Legal_hold_commands_require_authentication_and_cross_tenant_release_is_hidden()
     {
-        var missingOperator = await ClientFor(Guid.NewGuid()).PostAsJsonAsync("/api/trust/legal-holds", new
+        var unauthenticated = await factory.CreateClient().PostAsJsonAsync("/api/trust/legal-holds", new
         {
             dataClass = "DomainEvents",
             reason = "Investigation",
         });
-        Assert.Equal(HttpStatusCode.BadRequest, missingOperator.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
 
         var tenantA = ClientFor(Guid.NewGuid());
-        tenantA.DefaultRequestHeaders.Add("X-Operator", "legal@example.com");
         var placed = await tenantA.PostAsJsonAsync("/api/trust/legal-holds", new
         {
             dataClass = "DomainEvents",
@@ -281,10 +284,16 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
         var holdId = (await JsonDocument.ParseAsync(await placed.Content.ReadAsStreamAsync())).RootElement
             .GetProperty("holdId").GetGuid();
         var tenantB = ClientFor(Guid.NewGuid());
-        tenantB.DefaultRequestHeaders.Add("X-Operator", "other@example.com");
         tenantB.DefaultRequestHeaders.Add("X-Approval-Reference", "approval:1");
         var response = await tenantB.PostAsJsonAsync($"/api/trust/legal-holds/{holdId}/release", new { reason = "Attempt" });
+        var nonexistent = await tenantB.PostAsJsonAsync(
+            $"/api/trust/legal-holds/{Guid.NewGuid()}/release",
+            new { reason = "Attempt" });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(response.StatusCode, nonexistent.StatusCode);
+        Assert.Equal(
+            await response.Content.ReadAsStringAsync(),
+            await nonexistent.Content.ReadAsStringAsync());
         Assert.DoesNotContain(holdId.ToString(), await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -297,12 +306,8 @@ public class ExperienceApiTests(DevWebFactory factory) : IClassFixture<DevWebFac
 
     // ---- Resolution & Merge Workbench (P6-T04) ----
 
-    private HttpClient ClientFor(Guid tenant)
-    {
-        var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenant.ToString());
-        return client;
-    }
+    private HttpClient ClientFor(Guid tenant, Guid? objectId = null) =>
+        factory.AuthenticatedClient(tenant, objectId: objectId);
 
     private static ObservationDescriptor Obs(string value) =>
         new(Guid.NewGuid(), new NativeIdentifier("sys", "t", value), "Seeded", "agent", "Self-reported / Manual Import");
