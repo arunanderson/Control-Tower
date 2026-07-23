@@ -2,63 +2,110 @@
 
 _Single source of build truth. Updated by the build agent as part of every task's Document step._
 
-| Field             | Value                                                                                                  |
-| ----------------- | ------------------------------------------------------------------------------------------------------ |
-| **Current phase** | Phase 5 — Enterprise readiness foundations                                                             |
-| **Current epic**  | Build-state reconciliation after enterprise-control merge trains                                       |
-| **Current task**  | P0-T17 complete — repository state reconciled through PR #18                                           |
-| **Overall state** | **Development capability slices are green; production readiness remains materially incomplete.**       |
-| **Merge policy**  | Merge trains — agent merges tenant-independent green PRs with a Merge Readiness Report; emergent-first |
-| **Last updated**  | 2026-07-22                                                                                             |
-| **Updated by**    | Claude Code (build agent)                                                                              |
+| Field               | Value                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Current phase**   | Phase 1 — production security, privacy and durable-data foundation                                           |
+| **Current task**    | P0-T18 — enterprise observability V1 rebaseline                                                              |
+| **Overall state**   | **Development capability slices are green; the production product remains materially incomplete.**           |
+| **Product outcome** | One role-appropriate Control Tower for all technically observable AI use across the corporate-managed estate |
+| **Merge policy**    | Merge trains — agent may merge tenant-independent green PRs with a Merge Readiness Report                    |
+| **Last updated**    | 2026-07-23                                                                                                   |
+| **Updated by**      | Codex build agent                                                                                            |
 
-## Completed & merged on `main`
+## Product scope now locked
 
-- **E0/E1 rails + CI** (#1) · **E2 platform skeleton + tenancy** (#3) · **E3 event backbone** (#4) · **Platform foundation** (#5) · **Asset Ledger C1** (#6) · **Cost & Value Intelligence C3** (#7) · **Governance Orchestration C2** (#8) · **Experience Layer C7** (#9) · **Provider framework C4.5, Phase A** (#10) · **C4 observation ingestion** (#11) · **C1 entity resolution** (#12) · **Resolution Workbench** (#13) · **coverage/freshness** (#14) · **privileged-read audit** (#15) · **provider sweep execution** (#16) · **reporting snapshots** (#17) · **legal hold** (#18).
-- **C4 observation ingestion (P6-T02):** the "one door in" (ADR-009/020) — contract-validate → privacy Gate 1 (L1) → delta-suppress → append immutable `ProviderObservation` → emit `ObservationIngested` to the hash-chained stream + outbox.
-- **C1 entity resolution (P6-T03):** consumes `ObservationIngested` via **host-composed delivery** (Providers ⊥ Ledger); identity aliases, **deterministic matching**, link / new-asset / **MergeCase**; **High auto-links, sub-High never auto-links**; **lowest-confidence-wins** roll-up; **merge/split** without touching observations; links **severed/superseded, never deleted**; tenant-isolated + idempotent; Microsoft rules PoC-gated.
-- **C4 sweep execution (P6-T07):** secret-free tenant job enters the event/outbox backbone; the worker resolves an existing provider connection and invokes the invariant ingestion pipeline with idempotent completion and retry-safe claims (#16).
+The Control Tower covers the corporate-managed endpoint, browser, identity, network, SaaS, cloud,
+agent, API, licence and finance footprint. Named tools such as DeepSeek or ChatGPT are examples, not
+boundaries. CIO, CISO/InfoSec, People/Transformation, AI/CoE and Audit experiences are
+policy-filtered C7 views over the same evidence.
 
-## Paused local draft
+DEV-002 moves custom managed browser/endpoint collection and technically supportable
+enterprise-versus-personal classification into V1. It does **not** change the frozen architecture:
+all external signals still enter through C4; C1/C2/C3/C5/C8/C9 retain their authorities; all human
+experiences leave through C7; C6 stays vacant.
 
-- **P5-T04 retention enforcement:** incomplete work is preserved outside `main` in a named local Git stash. It is not committed, pushed, active or represented as implemented. Its contract must require an authoritative jurisdiction-policy provider rather than operator-supplied legal bounds.
+The product promise is all **technically observable** activity within the managed corporate
+footprint, with explicit blind spots, freshness, confidence and policy limits. It will not claim
+visibility that cannot be evidenced.
 
-## Blocked (TENANT GATE — Phase B, external dependency)
+See
+`docs/build/plans/ENTERPRISE-OBSERVABILITY-DELIVERY-PLAN.md` and
+`docs/build/deviations/DEV-002-enterprise-observability-v1.md`.
 
-- **Phase B — Microsoft providers + Gate-1 PoC execution:** Cursor is waiting at Wave 0 Step 0.3 for a human permission-catalogue check. No permission, consent or credential should be added during that check. Microsoft provider implementation remains gated on real PoC findings.
-- **Retention jurisdiction authority:** actual jurisdiction floors/ceilings require an authoritative, versioned Legal-owned policy source. The engine may be built against that fail-closed port, but production policy values cannot be invented by an implementation agent.
+## Merged on `main`
 
-## Required Arun actions
+PRs #1–#18 delivered the build rails, modular host, in-memory development foundations, Asset Ledger
+(C1), Economics (C3), Governance (C2), Experience (C7), provider framework and CSV provider (C4),
+observation ingestion, entity resolution, resolution workbench, coverage/freshness, privileged-read
+audit, provider sweep jobs, reporting snapshots and legal holds. PR #19 reconciled the build record.
+PR #20 recorded the Microsoft sandbox readiness findings.
 
-- **Complete Cursor's Wave 0 Step 0.3** permission-catalogue check and return the observed permission names or “none found.”
-- **Confirm Legal ownership and source** for versioned jurisdiction retention floors/ceilings before production policy activation.
-- **Branch protection + CODEOWNERS enforcement + `production` environment** (manual GitHub config) — recommended.
+These are **implemented development slices**, not evidence that the production SaaS is finished.
 
-## Test status
+## Microsoft sandbox evidence
 
-- Backend: **135 tests green** (Platform 10, Ledger 27, Governance 17, Economics 20, Providers 24, Architecture 5, Host.Web 32); build 0/0. SPA: **10 vitest green**; `npm run build` clean; production dependencies 0 vulnerabilities.
+- App-only authentication and Agent ID reads succeeded.
+- Agent ID inventory is empty.
+- The tenant lacks representative agent archetypes and a published Copilot Studio/Foundry test
+  estate.
+- Graph Package Management v1.0 and beta both reject the unlicensed tenant with `403`; Microsoft Agent
+  365 licensing is confirmed as a provider prerequisite.
+- PoC-1/2/3 remain incomplete for correlation, manifest recovery, coverage and throttling.
 
-## Deployment status
+Microsoft Agent 365 is not a dependency for the Control Tower. It is one optional evidence source.
 
-- Nothing deployed. The web host registers application modules only in Development; the worker still uses in-memory adapters. There is no production PostgreSQL/RLS, Service Bus, Key Vault, Blob/WORM, Entra authentication, IaC, observability or DR evidence. No production access/credentials/secrets and no frozen-doc changes.
+## Production gaps on the critical path
+
+- Entra federation authentication, production role/scope/purpose authorisation and JIT staff access.
+- C8 telemetry-policy history, C5 jurisdiction/population resolution and universal privacy Gate 2.
+- Policy-as-of storage refusal at Gate 1; the current development ingestion path must not be used for
+  endpoint telemetry until this is complete.
+- Azure PostgreSQL/RLS repositories, transactional event/outbox semantics, durable tenant watermarks
+  and job receipts.
+- Azure Service Bus retry/DLQ, Key Vault credentials, Blob/WORM anchors and verification jobs.
+- Export, erasure, tenant offboarding deletion and authoritative retention enforcement.
+- Microsoft, security/network, SaaS, cloud, finance and vendor providers.
+- Tenant-bound first-party browser and endpoint collection, signing, fleet deployment and health.
+- Cross-source deduplication, temporal semantics, complete identifier preservation and multi-currency
+  economics.
+- Role-complete CIO, CISO, People/Transformation, AI/CoE and Audit experiences.
+- Azure IaC, observability, performance, threat-model, DR, staging and production evidence.
 
 ## Next autonomous train
 
-- **Policy-driven retention mechanism**, using a versioned jurisdiction-policy provider and failing closed without an authoritative rule. It must call C9 legal-hold precedence before deletion and event every deletion. Actual legal values remain human-governed. **Phase B** remains tenant-gated.
+Production identity/privacy foundation:
 
-## Overall Blueprint Completion
+1. federation authentication and role/purpose authorisation;
+2. unforgeable tenant context attack tests;
+3. telemetry-policy and jurisdiction ports;
+4. read-time Gate 2 plus policy-as-of Gate 1 storage refusal;
+5. durable PostgreSQL/RLS and transactional outbox work after those boundaries are test-enforced.
 
-| Capability            | Status      | Notes                                                                                 |
-| --------------------- | ----------- | ------------------------------------------------------------------------------------- |
-| Platform Foundation   | Complete    | DI, tenancy (AsyncLocal, by-construction), event store + hash chain, outbox (#1–#5)   |
-| Asset Ledger (C1)     | Complete    | AIAsset aggregate, lifecycle, ownership, aliases, resolution links (#6)               |
-| Provider Framework    | Complete    | C4.5 plug-in framework + CSV provider + harness (#10)                                 |
-| Observation Pipeline  | Complete    | C4 "one door in": observe → privacy-mark → delta-suppress → append → emit (#11)       |
-| Entity Resolution     | Complete    | Deterministic match / MergeCase / lowest-wins / merge-split; MS rules PoC-gated (#12) |
-| Governance (C2)       | Complete    | Cases, tiered approvals, waivers, retirement, reuse, debt (#8)                        |
-| Economics (C3)        | Complete    | One model, many ROI views; signed immutable snapshots/restatement (#7, P5-T02)        |
-| Experience (C7)       | Complete    | Five areas + Asset Record (#9); Resolution Workbench (#13); live coverage projection  |
-| Decision Intelligence | Not Started | C6 intentionally vacant (ADR-010) — no separate context planned                       |
-| Provider Integrations | Blocked     | Microsoft Graph/Copilot/Entra/PPAC providers — need the tenant (Phase B)              |
-| Microsoft PoCs        | Blocked     | Gate-1 PoC-1/2/3 — need the tenant; Wave 0 provisioning externally unavailable        |
-| Production Readiness  | In Progress | Development seams only; identity, Gate 2, exports, Azure adapters/IaC and DR remain   |
+Endpoint or browser events will not be onboarded before the privacy boundary is real.
+
+## Human gates — no immediate action required
+
+- Representative Microsoft tenant/licensing and consent when a real-provider validation task reaches
+  that point.
+- Legal/Privacy/works-council approval and employee transparency before applicable endpoint or L2+
+  production activation.
+- Endpoint signing/MDM/security policy before fleet deployment.
+- Finance-owned contract/rate-card validation before production economic claims.
+- PD-006 ratification of DEV-002 before production release.
+- Production Azure credentials, shared-environment migrations and deployment.
+
+## Capability maturity
+
+| Capability                  | Current maturity                         | Production closure                                                                      |
+| --------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------- |
+| Platform foundation         | Development slice green                  | Entra, RLS, durable adapters, IaC, observability and DR                                 |
+| Asset Ledger (C1)           | Domain and in-memory workflow green      | Durable repository, production authorisation and real-source validation                 |
+| Economics (C3)              | Domain and snapshot workflow green       | Currency-safe aggregation, production rate cards/providers and durable projections      |
+| Governance (C2)             | Domain workflow green                    | Durable workflow, authorisation, notifications/control adapters and production policy   |
+| Experience (C7)             | Development SPA/API green                | Gate 2 everywhere, persona completion, accessibility/e2e and production hosting         |
+| Provider framework (C4)     | Contracts, CSV and sweep pipeline green  | Durable state, production secrets/queue, source adapters and fleet ingestion            |
+| Observation pipeline        | Development path green                   | Policy-as-of storage refusal, typed/minimised payloads and persistent append-only store |
+| Entity resolution           | Deterministic development workflow green | Full identifier sets, temporal validity, deduplication and real-source rule evidence    |
+| Microsoft providers/PoCs    | Sandbox readiness partially exercised    | Representative data/licensing plus completed provider implementations                   |
+| Endpoint/browser visibility | Approved and planned under DEV-002       | Collector gateway, signed collectors, privacy/security review and managed deployment    |
+| Production readiness        | In progress                              | All critical-path gaps above plus staging evidence and human production gate            |
