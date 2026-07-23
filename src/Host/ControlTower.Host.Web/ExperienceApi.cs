@@ -6,6 +6,8 @@ using ControlTower.Modules.Ledger.Application;
 using ControlTower.Modules.Ledger.Domain;
 using ControlTower.Modules.Providers.Application;
 using ControlTower.Host.Web.Authentication;
+using ControlTower.Host.Web.Authorization;
+using ControlTower.Modules.Trust.Authorization;
 using ControlTower.Platform.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,26 +36,47 @@ public static class ExperienceApi
         });
 
         // Portfolio + the single polymorphic Asset Record.
-        api.MapGet("/portfolio/assets", async (IAssetLedgerReadModel ledger) => Results.Ok(await ledger.QueryAsync()));
+        api.MapGet("/portfolio/assets", async (IAssetLedgerReadModel ledger) =>
+                Results.Ok(await ledger.QueryAsync()))
+            .RequireControlTowerCapability(ControlTowerCapability.PortfolioRead);
         api.MapGet("/portfolio/assets/{id:guid}", async (Guid id, IAssetLedgerReadModel ledger) =>
         {
             var record = await ledger.GetAsync(new LedgerAssetId(id));
             return record is null ? Results.NotFound() : Results.Ok(record);
-        });
+        }).RequireControlTowerCapability(ControlTowerCapability.PortfolioRead);
 
         // Economics — one model, many read models.
-        api.MapGet("/economics/executive", async (EconomicsProjectionService e) => Results.Ok(await e.ExecutiveAsync(DateTimeOffset.UtcNow)));
-        api.MapGet("/economics/portfolio", async (EconomicsProjectionService e) => Results.Ok(await e.PortfolioRoiAsync(DateTimeOffset.UtcNow)));
-        api.MapGet("/economics/departments", async (EconomicsProjectionService e) => Results.Ok(await e.DepartmentRoiAsync(DateTimeOffset.UtcNow)));
-        api.MapGet("/economics/agents", async (EconomicsProjectionService e) => Results.Ok(await e.AgentRoiAsync(DateTimeOffset.UtcNow)));
+        api.MapGet("/economics/executive", async (EconomicsProjectionService e) =>
+                Results.Ok(await e.ExecutiveAsync(DateTimeOffset.UtcNow)))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.EconomicsExecutiveRead);
+        api.MapGet("/economics/portfolio", async (EconomicsProjectionService e) =>
+                Results.Ok(await e.PortfolioRoiAsync(DateTimeOffset.UtcNow)))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.EconomicsPortfolioRead);
+        api.MapGet("/economics/departments", async (EconomicsProjectionService e) =>
+                Results.Ok(await e.DepartmentRoiAsync(DateTimeOffset.UtcNow)))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.EconomicsDetailRead);
+        api.MapGet("/economics/agents", async (EconomicsProjectionService e) =>
+                Results.Ok(await e.AgentRoiAsync(DateTimeOffset.UtcNow)))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.EconomicsDetailRead);
         MapReportingPeriods(api);
 
         // Governance workbench.
-        api.MapGet("/governance/cases", async (GovernanceService g) => Results.Ok(await g.CasesAsync(DateTimeOffset.UtcNow)));
-        api.MapGet("/governance/debt", async (GovernanceService g) => Results.Ok(await g.DebtAsync()));
+        api.MapGet("/governance/cases", async (GovernanceService g) =>
+                Results.Ok(await g.CasesAsync(DateTimeOffset.UtcNow)))
+            .RequireControlTowerCapability(ControlTowerCapability.GovernanceRead);
+        api.MapGet("/governance/debt", async (GovernanceService g) =>
+                Results.Ok(await g.DebtAsync()))
+            .RequireControlTowerCapability(ControlTowerCapability.GovernanceRead);
 
         // Trust & coverage (honest coverage/freshness).
-        api.MapGet("/trust/coverage", async (ICoverageReadModel coverage) => Results.Ok(await coverage.GetAsync()));
+        api.MapGet("/trust/coverage", async (ICoverageReadModel coverage) =>
+                Results.Ok(await coverage.GetAsync()))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.TrustCoverageRead);
         api.MapGet("/trust/privileged-access", async (PrivilegedAccessService audit) =>
                 Results.Ok((await audit.ListAsync()).Select(x => new
                 {
@@ -64,6 +87,8 @@ public static class ExperienceApi
                     x.Record.OccurredAt,
                     x.CorrelationId,
                 })))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.PrivilegedAccessRead)
             .AuditPrivilegedRead("trust.privileged-access-log");
         MapLegalHolds(api);
 
@@ -73,10 +98,14 @@ public static class ExperienceApi
             tenant = tenants.Current.ToString(),
             areas = new[] { "Portfolio", "Economics", "Governance", "Trust", "Administration" },
             readModelOnly = true,
-        }));
+        })).RequireControlTowerCapability(
+            ControlTowerCapability.AdministrationRead);
 
         // Registered providers (C4.5 discovery / metadata) — manifests only.
-        api.MapGet("/admin/providers", (IProviderRegistry registry) => Results.Ok(registry.Discover()));
+        api.MapGet("/admin/providers", (IProviderRegistry registry) =>
+                Results.Ok(registry.Discover()))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.AdministrationRead);
 
         MapResolutionWorkbench(api);
     }
@@ -84,7 +113,9 @@ public static class ExperienceApi
     /// <summary>C9 legal-hold lifecycle; active matching holds take precedence over retention.</summary>
     private static void MapLegalHolds(RouteGroupBuilder api)
     {
-        api.MapGet("/trust/legal-holds", async (LegalHoldService service) => Results.Ok(await service.ListAsync()));
+        api.MapGet("/trust/legal-holds", async (LegalHoldService service) =>
+                Results.Ok(await service.ListAsync()))
+            .RequireControlTowerCapability(ControlTowerCapability.LegalHoldsRead);
         api.MapPost("/trust/legal-holds", (PlaceLegalHoldRequest request, LegalHoldService service, HttpContext http) =>
             LegalHoldGuard(async () =>
             {
@@ -97,39 +128,61 @@ public static class ExperienceApi
                         request.Reason,
                         RequiredLegalHoldOperator(http)),
                 };
-            }));
+            })).RequireControlTowerCapability(
+                ControlTowerCapability.LegalHoldsManage);
         api.MapPost("/trust/legal-holds/{id:guid}/release", (Guid id, ReleaseLegalHoldRequest request, LegalHoldService service, HttpContext http) =>
             LegalHoldGuard(() => service.ReleaseAsync(
                 id,
                 RequiredLegalHoldOperator(http),
                 request.Reason,
-                RequiredApprovalReference(http))));
+                RequiredApprovalReference(http))))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.LegalHoldsManage);
     }
 
     /// <summary>Reporting-period commands and immutable C3 snapshot read models (ADR-016).</summary>
     private static void MapReportingPeriods(RouteGroupBuilder api)
     {
         api.MapGet("/economics/reporting-periods", async (ReportingSnapshotService service) =>
-            Results.Ok(await service.PeriodsAsync()));
+                Results.Ok(await service.PeriodsAsync()))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.ReportingPeriodsRead);
         api.MapGet("/economics/reporting-periods/{id:guid}/snapshots", (Guid id, ReportingSnapshotService service) =>
-            EconomicsGuard(() => service.SnapshotsAsync(id)));
+                EconomicsGuard(() => service.SnapshotsAsync(id)))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.ReportingPeriodsRead);
 
         api.MapPost("/economics/reporting-periods", (CreateReportingPeriodRequest request, ReportingSnapshotService service, HttpContext http) =>
             EconomicsGuard(async () =>
             {
                 _ = RequiredOperator(http);
                 return new { periodId = await service.CreatePeriodAsync(request.Start, request.End) };
-            }));
+            })).RequireControlTowerCapability(
+                ControlTowerCapability.ReportingPeriodsManage);
         api.MapPost("/economics/reporting-periods/{id:guid}/closing", (Guid id, ReportingSnapshotService service, HttpContext http) =>
             EconomicsGuard(async () =>
             {
                 _ = RequiredOperator(http);
                 await service.BeginClosingAsync(id);
-            }));
+            })).RequireControlTowerCapability(
+                ControlTowerCapability.ReportingPeriodsManage);
         api.MapPost("/economics/reporting-periods/{id:guid}/freeze", (Guid id, SnapshotRequest request, ReportingSnapshotService service, HttpContext http) =>
-            EconomicsGuard(() => service.FreezeAsync(id, request.PayloadJson, request.InputBasis, RequiredOperator(http))));
+                EconomicsGuard(() => service.FreezeAsync(
+                    id,
+                    request.PayloadJson,
+                    request.InputBasis,
+                    RequiredOperator(http))))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.ReportingPeriodsManage);
         api.MapPost("/economics/reporting-periods/{id:guid}/restate", (Guid id, RestatementRequest request, ReportingSnapshotService service, HttpContext http) =>
-            EconomicsGuard(() => service.RestateAsync(id, request.PayloadJson, request.InputBasis, RequiredOperator(http), request.Reason)));
+                EconomicsGuard(() => service.RestateAsync(
+                    id,
+                    request.PayloadJson,
+                    request.InputBasis,
+                    RequiredOperator(http),
+                    request.Reason)))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.ReportingPeriodsManage);
     }
 
     /// <summary>
@@ -141,23 +194,30 @@ public static class ExperienceApi
     private static void MapResolutionWorkbench(RouteGroupBuilder api)
     {
         // Reads (read-model-only).
-        api.MapGet("/resolution/merge-cases", async (ResolutionWorkbenchReadModel wb) => Results.Ok(await wb.OpenMergeCasesAsync()));
+        api.MapGet("/resolution/merge-cases", async (ResolutionWorkbenchReadModel wb) =>
+                Results.Ok(await wb.OpenMergeCasesAsync()))
+            .RequireControlTowerCapability(ControlTowerCapability.ResolutionRead);
         api.MapGet("/resolution/assets/{id:guid}", async (Guid id, ResolutionWorkbenchReadModel wb) =>
         {
             var view = await wb.AssetResolutionAsync(new LedgerAssetId(id));
             return view is null ? Results.NotFound() : Results.Ok(view);
-        });
+        }).RequireControlTowerCapability(ControlTowerCapability.ResolutionRead);
 
         // Operator actions (event-driven, auditable; the UI just invokes them).
         api.MapPost("/resolution/merge", (MergeRequest req, EntityResolutionService svc, HttpContext http) =>
-            Guard(() => svc.MergeAsync(new LedgerAssetId(req.TargetId), new LedgerAssetId(req.SourceId), Operator(http))));
+                Guard(() => svc.MergeAsync(
+                    new LedgerAssetId(req.TargetId),
+                    new LedgerAssetId(req.SourceId),
+                    Operator(http))))
+            .RequireControlTowerCapability(ControlTowerCapability.ResolutionManage);
 
         api.MapPost("/resolution/split", (SplitRequest req, EntityResolutionService svc, HttpContext http) =>
             Guard(async () =>
             {
                 var newId = await svc.SplitAsync(new LedgerAssetId(req.AssetId), req.LinkIds, req.NewDisplayName, req.NewAssetType, Operator(http));
                 return new { newAssetId = newId.Value };
-            }));
+            })).RequireControlTowerCapability(
+                ControlTowerCapability.ResolutionManage);
 
         api.MapPost("/resolution/manual-link", (ManualLinkRequest req, EntityResolutionService svc, HttpContext http) =>
             Guard(async () =>
@@ -168,10 +228,13 @@ public static class ExperienceApi
                     req.ObservationRef,
                     Operator(http));
                 return new { assetId = id.Value };
-            }));
+            })).RequireControlTowerCapability(
+                ControlTowerCapability.ResolutionManage);
 
         api.MapPost("/resolution/merge-cases/{id:guid}/resolve", (Guid id, ResolveMergeCaseRequest req, EntityResolutionService svc, HttpContext http) =>
-            Guard(() => svc.ResolveMergeCaseAsync(id, req.Outcome, Operator(http))));
+                Guard(() => svc.ResolveMergeCaseAsync(id, req.Outcome, Operator(http))))
+            .RequireControlTowerCapability(
+                ControlTowerCapability.ResolutionManage);
     }
 
     private static string Operator(HttpContext http) =>

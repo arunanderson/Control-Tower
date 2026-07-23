@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using ControlTower.Host.Web.Authentication;
+using ControlTower.Modules.Trust.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -335,14 +336,18 @@ public class AuthenticationBoundaryTests(LocalJwtWebFactory factory)
     [Fact]
     public async Task Purpose_is_bounded_business_context_not_identity()
     {
-        var client = factory.AuthenticatedClient(Guid.NewGuid());
+        var client = factory.AuthenticatedClient(
+            Guid.NewGuid(),
+            roles: [ControlTowerRole.Administrator]);
         client.DefaultRequestHeaders.Add("X-Purpose", new string('x', 513));
 
         var response = await client.GetAsync("/api/trust/privileged-access");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        var controlCharacterClient = factory.AuthenticatedClient(Guid.NewGuid());
+        var controlCharacterClient = factory.AuthenticatedClient(
+            Guid.NewGuid(),
+            roles: [ControlTowerRole.Administrator]);
         controlCharacterClient.DefaultRequestHeaders.TryAddWithoutValidation(
             "X-Purpose",
             "invalid\u0001purpose");
@@ -355,7 +360,9 @@ public class AuthenticationBoundaryTests(LocalJwtWebFactory factory)
     [Fact]
     public async Task Approval_reference_is_bounded_single_business_context()
     {
-        var client = factory.AuthenticatedClient(Guid.NewGuid());
+        var client = factory.AuthenticatedClient(
+            Guid.NewGuid(),
+            roles: [ControlTowerRole.Administrator]);
         var placed = await client.PostAsJsonAsync(
             "/api/trust/legal-holds",
             new { dataClass = "All", reason = "Investigation" });

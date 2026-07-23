@@ -1,17 +1,20 @@
 using ControlTower.Adapters.InMemory;
 using ControlTower.Host.Web;
 using ControlTower.Host.Web.Authentication;
+using ControlTower.Host.Web.Authorization;
 using ControlTower.Modules.Economics;
 using ControlTower.Modules.Audit;
 using ControlTower.Modules.Governance;
 using ControlTower.Modules.Ledger;
 using ControlTower.Modules.Providers;
+using ControlTower.Modules.Trust.Authorization;
 using ControlTower.Platform.DependencyInjection;
 using ControlTower.Platform.Tenancy;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControlTowerAuthentication(builder.Configuration);
+builder.Services.AddControlTowerAuthorization();
 builder.Services.AddControlTowerPlatform();
 
 // DEV-001: in-memory port substitutes + module wiring are registered for local/dev only.
@@ -25,6 +28,7 @@ if (experienceApiEnabled)
     builder.Services.AddGovernanceModule();
     builder.Services.AddProviderFramework();
     builder.Services.AddAuditModule();
+    builder.Services.AddDevelopmentControlTowerAuthorization();
 }
 
 var app = builder.Build();
@@ -40,14 +44,26 @@ app.MapGet("/ready", () => Results.Ok(new { status = "ready" }))
     .AllowAnonymous();
 
 // A tenant-scoped probe: proves scoping-by-construction end to end.
-app.MapGet("/whoami", (HttpContext http, ITenantContextAccessor tenants) =>
+app.MapGet("/whoami", async (
+        HttpContext http,
+        ITenantContextAccessor tenants,
+        IEffectiveAccessResolver accessResolver) =>
     {
         var human = AuthenticatedHumanContext.Require(http);
+        var access = await accessResolver.ResolveAsync(
+            human.ObjectId,
+            http.RequestAborted);
         return Results.Ok(new
         {
             tenant = tenants.Current.ToString(),
             directoryTenant = human.DirectoryTenantId,
             actor = human.CanonicalActor,
+            roles = access.Roles.Select(
+                ControlTowerAccessCatalog.Name),
+            capabilities = access.Capabilities
+                .OrderBy(capability => capability)
+                .Select(ControlTowerAccessCatalog.Name),
+            organizationScope = access.OrganizationScope.ToString(),
         });
     })
     .RequireAuthorization();

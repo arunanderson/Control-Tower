@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using ControlTower.Modules.Audit;
 using ControlTower.Modules.Ledger.Application;
+using ControlTower.Modules.Trust.Authorization;
 using ControlTower.Platform.Events;
 using ControlTower.Modules.Ledger.Domain;
 using ControlTower.Platform.Tenancy;
@@ -43,7 +44,6 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
     [InlineData("/api/governance/cases")]
     [InlineData("/api/governance/debt")]
     [InlineData("/api/trust/coverage")]
-    [InlineData("/api/admin/summary")]
     [InlineData("/api/resolution/merge-cases")]
     public async Task Api_returns_200_within_a_tenant_scope(string path)
     {
@@ -146,7 +146,7 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         Guid? objectId = null,
         string purpose = "Support investigation")
     {
-        var client = ClientFor(tenant, objectId);
+        var client = AdminClient(tenant, objectId);
         client.DefaultRequestHeaders.Add("X-Actor", "forged-actor");
         client.DefaultRequestHeaders.Add("X-Purpose", purpose);
         return client;
@@ -157,7 +157,8 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
     [Fact]
     public async Task Privileged_log_requires_actor_and_purpose()
     {
-        var response = await ClientFor(Guid.NewGuid()).GetAsync("/api/trust/privileged-access");
+        var response = await AdminClient(Guid.NewGuid())
+            .GetAsync("/api/trust/privileged-access");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -199,7 +200,7 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
     {
         var tenantA = Guid.NewGuid();
         var objectId = Guid.NewGuid();
-        var client = ClientFor(tenantA, objectId);
+        var client = AdminClient(tenantA, objectId);
         client.DefaultRequestHeaders.Add("X-Operator", "forged@example.com");
         var placed = await client.PostAsJsonAsync("/api/trust/legal-holds", new
         {
@@ -224,7 +225,8 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
                 new RetentionSubject(RetentionDataClass.InventoryObservations, "asset:42")));
         }
 
-        var otherTenant = await ClientFor(Guid.NewGuid()).GetFromJsonAsync<List<LegalHoldView>>("/api/trust/legal-holds");
+        var otherTenant = await AdminClient(Guid.NewGuid())
+            .GetFromJsonAsync<List<LegalHoldView>>("/api/trust/legal-holds");
         Assert.Empty(otherTenant!);
     }
 
@@ -233,7 +235,7 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
     {
         var tenant = Guid.NewGuid();
         var objectId = Guid.NewGuid();
-        var client = ClientFor(tenant, objectId);
+        var client = AdminClient(tenant, objectId);
         var placed = await client.PostAsJsonAsync("/api/trust/legal-holds", new
         {
             dataClass = "All",
@@ -275,7 +277,7 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         });
         Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
 
-        var tenantA = ClientFor(Guid.NewGuid());
+        var tenantA = AdminClient(Guid.NewGuid());
         var placed = await tenantA.PostAsJsonAsync("/api/trust/legal-holds", new
         {
             dataClass = "DomainEvents",
@@ -283,7 +285,7 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         });
         var holdId = (await JsonDocument.ParseAsync(await placed.Content.ReadAsStreamAsync())).RootElement
             .GetProperty("holdId").GetGuid();
-        var tenantB = ClientFor(Guid.NewGuid());
+        var tenantB = AdminClient(Guid.NewGuid());
         tenantB.DefaultRequestHeaders.Add("X-Approval-Reference", "approval:1");
         var response = await tenantB.PostAsJsonAsync($"/api/trust/legal-holds/{holdId}/release", new { reason = "Attempt" });
         var nonexistent = await tenantB.PostAsJsonAsync(
@@ -307,7 +309,16 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
     // ---- Resolution & Merge Workbench (P6-T04) ----
 
     private HttpClient ClientFor(Guid tenant, Guid? objectId = null) =>
-        factory.AuthenticatedClient(tenant, objectId: objectId);
+        factory.AuthenticatedClient(
+            tenant,
+            objectId: objectId,
+            roles: [ControlTowerRole.Operator]);
+
+    private HttpClient AdminClient(Guid tenant, Guid? objectId = null) =>
+        factory.AuthenticatedClient(
+            tenant,
+            objectId: objectId,
+            roles: [ControlTowerRole.Administrator]);
 
     private static ObservationDescriptor Obs(string value) =>
         new(Guid.NewGuid(), new NativeIdentifier("sys", "t", value), "Seeded", "agent", "Self-reported / Manual Import");

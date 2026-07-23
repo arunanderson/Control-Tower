@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using ControlTower.Host.Web.Authentication;
+using ControlTower.Modules.Trust.Authorization;
 using ControlTower.Platform.Tenancy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
@@ -94,14 +95,41 @@ public sealed class LocalJwtWebFactory : WebApplicationFactory<Program>
         Guid internalTenantId,
         Guid? directoryTenantId = null,
         Guid? objectId = null,
-        string subject = "control-tower-test-user")
+        string subject = "control-tower-test-user",
+        IEnumerable<ControlTowerRole>? roles = null)
     {
         var external = directoryTenantId ?? internalTenantId;
+        var actor = objectId ?? Guid.NewGuid();
         AllowTenant(external, internalTenantId);
-        return ClientWithToken(IssueHumanToken(
+        var client = ClientWithToken(IssueHumanToken(
             external,
-            objectId ?? Guid.NewGuid(),
+            actor,
             subject));
+        AssignRoles(
+            internalTenantId,
+            actor,
+            roles ?? [ControlTowerRole.Viewer]);
+        return client;
+    }
+
+    public void AssignRoles(
+        Guid internalTenantId,
+        Guid objectId,
+        IEnumerable<ControlTowerRole> roles)
+    {
+        using var scope = Services.CreateScope();
+        var tenants =
+            scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+        using var _ = tenants.BeginScope(new TenantId(internalTenantId));
+        var service =
+            scope.ServiceProvider.GetRequiredService<RoleAssignmentService>();
+        var changedBy = RoleAssignmentActor.System("test-fixture");
+        foreach (var role in roles)
+        {
+            service.AssignAsync(objectId, role, changedBy)
+                .GetAwaiter()
+                .GetResult();
+        }
     }
 
     public HttpClient ClientWithToken(string token)
