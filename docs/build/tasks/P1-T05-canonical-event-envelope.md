@@ -5,7 +5,7 @@ type: task-contract
 schema_version: 1
 epic: EPIC-1-2
 phase: PHASE-1
-status: draft
+status: complete
 objective: Version and harden the existing event backbone's storage-integrity frame before P1-T06 completes the E20 audit metadata and any permanent PostgreSQL event record is authored.
 blueprint_refs:
   - docs/blueprint/stage-04-domain-model.md#5-domain-events-the-canonical-set
@@ -107,8 +107,8 @@ acceptance_criteria:
 evidence_required: [docs/build/evidence/EVIDENCE-P1-T05.md]
 rollback: Revert the PR; no persistent datastore migration tenant configuration external system or production environment is changed.
 requires_human_approval: true
-approved_by: null
-approved_hash: null
+approved_by: Product Owner explicit approval on 2026-07-23
+approved_hash: "sha256:5915e8e3c10e8d018fd36fa23e5da9472b9053b1560c206ca3bc92631de2d7f1"
 ---
 
 ## Objective

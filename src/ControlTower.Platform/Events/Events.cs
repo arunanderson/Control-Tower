@@ -10,6 +10,8 @@ public interface IDomainEvent
 /// <summary>Hash-chain integrity over the event stream (ADR-021). Anchored to WORM storage periodically.</summary>
 public interface IHashChain
 {
-    /// <summary>Deterministic next hash from the previous hash and this record's canonical payload.</summary>
-    string ComputeNext(string previousHash, ReadOnlyMemory<byte> payload);
+    /// <summary>Deterministic next hash from the previous digest and this record's canonical envelope.</summary>
+    string ComputeNext(
+        string previousHash,
+        ReadOnlyMemory<byte> canonicalEnvelope);
 }

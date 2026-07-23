@@ -7,7 +7,10 @@ namespace ControlTower.Platform.Events;
 /// </summary>
 public interface IEventStore
 {
-    /// <summary>Appends an event with its canonical payload and returns the stored, chained record.</summary>
+    /// <summary>
+    /// Appends an event with its canonical payload and returns the stored, chained record. Opaque
+    /// event IDs are globally unique; duplicate appends fail before mutation.
+    /// </summary>
     ValueTask<StoredEvent> AppendAsync(IDomainEvent @event, ReadOnlyMemory<byte> payload, CancellationToken ct = default);
 
     /// <summary>Reads the full stream in order (for projection rebuilds and integrity verification).</summary>

@@ -90,6 +90,7 @@ public sealed class RoleAssignment
     }
 }
 
+[DomainEventContract("RoleAssignmentChanged", EventPrivilege.Privileged)]
 public sealed record RoleAssignmentChanged : IDomainEvent
 {
     public Guid EventId { get; init; } = Guid.NewGuid();
