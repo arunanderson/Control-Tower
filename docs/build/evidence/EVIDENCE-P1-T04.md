@@ -174,7 +174,7 @@ task.
 
 ## CI
 
-Pull request checks: pending branch publication.
+Pull request checks: https://github.com/arunanderson/Control-Tower/pull/24/checks
 
 ## Rollback
 
