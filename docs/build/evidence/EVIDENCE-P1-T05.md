@@ -173,6 +173,17 @@ forbidden file `EntityResolutionService.cs`. Its working-tree object and `origin
 identical (`59805cd1b85f9add92809d1605b1f1139af19f90`); all P1-T05 C# files pass the targeted
 formatter check. The required repository CI format job checks Markdown/YAML/JSON with Prettier.
 
+## CI portability repair
+
+The first PR backend run exposed a Linux clock-precision mismatch in the existing
+`Role_assignment_changes_are_evented_and_revocation_removes_access` assertion: the assignment/event
+payload retained five or six sub-microsecond ticks while its `StoredEvent.OccurredAt` correctly
+normalized to PostgreSQL microsecond precision. The allowed `RoleAssignments.cs` producer now
+captures one normalized timestamp for both E18 state and its E20 event. No assertion was weakened.
+
+The formerly failing Host test passed five consecutive focused runs, then the complete 189-test
+backend suite passed again before the repair was pushed.
+
 ## Independent review
 
 - Blueprint/test reviewer: no remaining P0, P1 or P2 findings after the canonical names were aligned,

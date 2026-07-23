@@ -209,7 +209,8 @@ public sealed class RoleAssignmentService(
         if (existing is not null)
             return existing.Id;
 
-        var now = DateTimeOffset.UtcNow;
+        var now = EventEnvelopeCanonicalizer.NormalizeTimestamp(
+            DateTimeOffset.UtcNow);
         var assignment = new RoleAssignment(
             Guid.NewGuid(),
             tenant,
@@ -235,7 +236,8 @@ public sealed class RoleAssignmentService(
             || assignment.Tenant != tenants.Current)
             throw NotFound();
 
-        var now = DateTimeOffset.UtcNow;
+        var now = EventEnvelopeCanonicalizer.NormalizeTimestamp(
+            DateTimeOffset.UtcNow);
         var revoked = assignment.Revoke(changedBy, now);
         await store.CommitAsync(
             revoked,
