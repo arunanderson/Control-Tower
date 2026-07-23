@@ -5,8 +5,8 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | Field               | Value                                                                                                        |
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Current phase**   | Phase 1 — production security, privacy and durable-data foundation                                           |
-| **Current task**    | P1-T03 — tenant-scoped server role and capability authorization                                              |
-| **Overall state**   | **Trusted HTTP authentication and authorization are green; production remains materially incomplete.**       |
+| **Current task**    | P1-T04 — SPA Entra bearer session and server-resolved experience access                                      |
+| **Overall state**   | **Trusted server auth and SPA bearer integration are green; production remains materially incomplete.**      |
 | **Product outcome** | One role-appropriate Control Tower for all technically observable AI use across the corporate-managed estate |
 | **Merge policy**    | Merge trains — agent may merge tenant-independent green PRs with a Merge Readiness Report                    |
 | **Last updated**    | 2026-07-23                                                                                                   |
@@ -46,26 +46,28 @@ These are **implemented development slices**, not evidence that the production S
 
 ## Current production-foundation train
 
-P1-T02 established the cryptographically validated Entra human, tenant and canonical actor
-boundary. P1-T03 now closes the authenticated-but-unrestricted API gap:
+P1-T02 established the cryptographically validated Entra human, tenant and canonical actor boundary,
+and P1-T03 closed the authenticated-but-unrestricted API gap. P1-T04 now completes the
+tenant-independent browser side of that boundary:
 
-- C8 owns exactly Viewer, Operator, Administrator and Executive-scope plus their immutable,
-  non-hierarchical capability bundles;
-- active assignments resolve from server-controlled, tenant-scoped ports and use opaque
-  `PersonKey` outside the minimal E19 directory-identity seam;
-- every one of the 27 current Experience API routes requires exactly one fine-grained capability;
-- caller role, group and capability claims or headers cannot grant access;
-- Viewer, Operator, Administrator and Executive-scope behavior is proven positively and negatively,
-  including lack of implicit role inheritance;
-- purpose remains additional business context and is evaluated only after authorization;
-- Host.Web maps C1 Ledger operations through the same C8 evaluator;
-- `/whoami` exposes only server-resolved effective roles, capabilities and `TenantWide` scope;
-- Production remains fail-closed with deny-all assignment readers and no Experience API routes until
-  durable E18/E19 adapters and production configuration exist.
+- the public SPA uses official MSAL Browser authorization-code with PKCE, the organisations authority,
+  one exact delegated API scope, `sessionStorage` and no client secret;
+- initialization and redirect completion precede the protected React tree, while account selection,
+  interaction-required reauthentication and account-specific logout remain explicit;
+- every `/whoami` and `/api` request carries a fresh Bearer token, sends no caller-controlled
+  identity/authority header and disables browser HTTP caching, ambient cookies, redirects and
+  referrers;
+- `/whoami` is runtime-validated and remains the only source for displayed tenant, roles,
+  capabilities and organisation scope;
+- areas, reads, optional sections and commands follow server capabilities, without duplicating C8
+  role bundles or using token claims;
+- malformed/no access fails before data requests; 401, 403, transient and interaction-required
+  states are distinct and non-looping;
+- the development proxy is loopback-only and anchored to `/whoami` plus `/api`.
 
-The server boundary is tenant-independent and locally proven with adversarial signed-token and
-adapter tests. Connecting it to a real tenant still requires SPA bearer acquisition, production app
-registration/onboarding values and durable role/person-key persistence.
+The complete server/browser boundary is tenant-independent and locally proven with 170 backend and
+114 SPA tests. Connecting it to a real tenant still requires production app
+registration/onboarding values, tenant consent and durable role/person-key persistence.
 
 ## Microsoft sandbox evidence
 
@@ -81,7 +83,7 @@ Microsoft Agent 365 is not a dependency for the Control Tower. It is one optiona
 
 ## Production gaps on the critical path
 
-- SPA bearer integration, JIT staff access and production Entra app/onboarding configuration.
+- JIT staff access and production Entra app/onboarding configuration and consent.
 - Durable E18 role assignments and E19 person-key mapping with RLS, transactional audit,
   active-grant uniqueness, optimistic revocation, field protection, O(1) severance and privileged
   map-read/write auditing.
@@ -103,12 +105,11 @@ Microsoft Agent 365 is not a dependency for the Control Tower. It is one optiona
 
 Production identity/privacy foundation:
 
-1. SPA bearer acquisition and server session integration;
-2. durable E18/E19 persistence and identity-severance controls;
-3. telemetry-policy and jurisdiction ports;
-4. read-time Gate 2 plus policy-as-of Gate 1 storage refusal;
-5. adversarial isolation tests spanning authentication, authorisation and privacy;
-6. remaining durable PostgreSQL/RLS and transactional outbox work after those boundaries are
+1. durable E18/E19 persistence and identity-severance controls;
+2. telemetry-policy and jurisdiction ports;
+3. read-time Gate 2 plus policy-as-of Gate 1 storage refusal;
+4. adversarial isolation tests spanning authentication, authorisation and privacy;
+5. remaining durable PostgreSQL/RLS and transactional outbox work after those boundaries are
    test-enforced.
 
 Endpoint or browser events will not be onboarded before the privacy boundary is real.
@@ -126,16 +127,16 @@ Endpoint or browser events will not be onboarded before the privacy boundary is 
 
 ## Capability maturity
 
-| Capability                  | Current maturity                         | Production closure                                                                      |
-| --------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------- |
-| Platform foundation         | Entra JWT human + C8 authorization green | SPA bearer, durable E18/E19, RLS, IaC, observability and DR                             |
-| Asset Ledger (C1)           | Domain and in-memory workflow green      | Durable repository, production authorisation and real-source validation                 |
-| Economics (C3)              | Domain and snapshot workflow green       | Currency-safe aggregation, production rate cards/providers and durable projections      |
-| Governance (C2)             | Domain workflow green                    | Durable workflow, authorisation, notifications/control adapters and production policy   |
-| Experience (C7)             | Development SPA/API green                | Gate 2 everywhere, persona completion, accessibility/e2e and production hosting         |
-| Provider framework (C4)     | Contracts, CSV and sweep pipeline green  | Durable state, production secrets/queue, source adapters and fleet ingestion            |
-| Observation pipeline        | Development path green                   | Policy-as-of storage refusal, typed/minimised payloads and persistent append-only store |
-| Entity resolution           | Deterministic development workflow green | Full identifier sets, temporal validity, deduplication and real-source rule evidence    |
-| Microsoft providers/PoCs    | Sandbox readiness partially exercised    | Representative data/licensing plus completed provider implementations                   |
-| Endpoint/browser visibility | Approved and planned under DEV-002       | Collector gateway, signed collectors, privacy/security review and managed deployment    |
-| Production readiness        | In progress                              | All critical-path gaps above plus staging evidence and human production gate            |
+| Capability                  | Current maturity                                   | Production closure                                                                      |
+| --------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Platform foundation         | Entra server + SPA bearer + C8 authorization green | Live registration/consent, durable E18/E19, RLS, IaC, observability and DR              |
+| Asset Ledger (C1)           | Domain and in-memory workflow green                | Durable repository, production authorisation and real-source validation                 |
+| Economics (C3)              | Domain and snapshot workflow green                 | Currency-safe aggregation, production rate cards/providers and durable projections      |
+| Governance (C2)             | Domain workflow green                              | Durable workflow, authorisation, notifications/control adapters and production policy   |
+| Experience (C7)             | Development SPA/API green                          | Gate 2 everywhere, persona completion, accessibility/e2e and production hosting         |
+| Provider framework (C4)     | Contracts, CSV and sweep pipeline green            | Durable state, production secrets/queue, source adapters and fleet ingestion            |
+| Observation pipeline        | Development path green                             | Policy-as-of storage refusal, typed/minimised payloads and persistent append-only store |
+| Entity resolution           | Deterministic development workflow green           | Full identifier sets, temporal validity, deduplication and real-source rule evidence    |
+| Microsoft providers/PoCs    | Sandbox readiness partially exercised              | Representative data/licensing plus completed provider implementations                   |
+| Endpoint/browser visibility | Approved and planned under DEV-002                 | Collector gateway, signed collectors, privacy/security review and managed deployment    |
+| Production readiness        | In progress                                        | All critical-path gaps above plus staging evidence and human production gate            |

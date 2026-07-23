@@ -1,6 +1,6 @@
 export interface AdminSummary {
   tenant: string;
-  areas: string[];
+  areas: readonly string[];
   readModelOnly: boolean;
 }
 

@@ -18,6 +18,9 @@ test("coverage is reported honestly, including no providers and no sweep", () =>
   expect(screen.getByTestId("coverage-note")).toHaveTextContent(
     "manual-registration only",
   );
+  expect(
+    screen.queryByRole("heading", { name: "Privileged access" }),
+  ).not.toBeInTheDocument();
 });
 
 test("provider surfaces expose state, freshness, and evidenced capabilities", () => {
@@ -82,4 +85,20 @@ test("privileged access history is customer-visible", () => {
   expect(screen.getByLabelText("Privileged access log")).toHaveTextContent(
     "Support investigation",
   );
+});
+
+test("an authorized empty privileged-access result is reported honestly", () => {
+  const coverage: CoverageView = {
+    providersConnected: 0,
+    assetsKnown: 0,
+    lastSuccessfulSweep: null,
+    coverageNote: "Unknown",
+    asOf: "2026-07-22T00:00:00Z",
+    surfaces: [],
+  };
+  render(<TrustArea coverage={coverage} privilegedAccess={[]} />);
+  expect(
+    screen.getByRole("heading", { name: "Privileged access" }),
+  ).toBeInTheDocument();
+  expect(screen.getByTestId("no-privileged-access")).toBeInTheDocument();
 });

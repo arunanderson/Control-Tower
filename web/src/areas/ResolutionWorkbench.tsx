@@ -6,9 +6,11 @@ import type { MergeCaseView } from "../api/types";
 // which emits the audit events. Low/ambiguous matches reach here precisely because they never auto-link.
 export function ResolutionWorkbench({
   mergeCases,
+  canResolve,
   onResolve,
 }: {
   mergeCases: MergeCaseView[];
+  canResolve: boolean;
   onResolve: (id: string, outcome: string) => void;
 }) {
   return (
@@ -41,9 +43,13 @@ export function ResolutionWorkbench({
                 <td data-testid="case-confidence">{c.confidence}</td>
                 <td>{c.candidateAssetIds.length}</td>
                 <td>
-                  <button onClick={() => onResolve(c.mergeCaseId, "reviewed")}>
-                    Resolve
-                  </button>
+                  {canResolve && (
+                    <button
+                      onClick={() => onResolve(c.mergeCaseId, "reviewed")}
+                    >
+                      Resolve
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
