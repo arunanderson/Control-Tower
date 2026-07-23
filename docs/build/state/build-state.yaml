@@ -236,6 +236,7 @@ merged_prs:
   - { number: 22, title: Trusted Entra tenant and human actor request boundary }
   - { number: 23, title: Tenant-scoped role and capability authorization }
   - { number: 24, title: SPA Entra bearer session and server-resolved access }
+  - { number: 25, title: Canonical event envelope and integrity verifier }
 open_prs: []
 next_trains:
   - "Production foundation: complete E20 and C8 identity/authorization semantics (P1-T06), then durable event/E18/E19 PostgreSQL foundations (P1-T07/P1-T08)."

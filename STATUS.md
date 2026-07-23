@@ -41,7 +41,8 @@ audit, provider sweep jobs, reporting snapshots and legal holds. PR #19 reconcil
 PR #20 recorded the Microsoft sandbox readiness findings. PR #21 records the enterprise-observability
 scope amendment and production delivery plan. PR #22 establishes the trusted Entra tenant and human
 actor request boundary. PR #23 establishes tenant-scoped C8 role and capability authorization. PR
-#24 connects the SPA to Entra delegated Bearer authentication and server-resolved access.
+#24 connects the SPA to Entra delegated Bearer authentication and server-resolved access. PR #25
+hardens the canonical event envelope and integrity verifier.
 
 These are **implemented development slices**, not evidence that the production SaaS is finished.
 

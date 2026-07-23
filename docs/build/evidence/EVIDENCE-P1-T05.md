@@ -207,6 +207,10 @@ configuration or tenant action was introduced.
 - Deviations requested: none.
 - Merge recommendation: merge when all required PR checks are green.
 
+## CI
+
+Pull request checks: https://github.com/arunanderson/Control-Tower/pull/25/checks
+
 ## Rollback
 
 Revert the P1-T05 PR. No persistent data, migration, tenant, infrastructure or production
