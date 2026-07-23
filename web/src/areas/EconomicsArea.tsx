@@ -43,16 +43,20 @@ export function EconomicsArea({
   departments,
 }: {
   portfolio: RoiView;
-  departments: RoiView[];
+  departments?: RoiView[];
 }) {
   return (
     <section>
       <h2>Economics</h2>
       <RoiCard roi={portfolio} />
-      <h3>By department</h3>
-      {departments.map((d) => (
-        <RoiCard key={d.scope} roi={d} />
-      ))}
+      {departments !== undefined && (
+        <>
+          <h3>By department</h3>
+          {departments.map((d) => (
+            <RoiCard key={d.scope} roi={d} />
+          ))}
+        </>
+      )}
     </section>
   );
 }

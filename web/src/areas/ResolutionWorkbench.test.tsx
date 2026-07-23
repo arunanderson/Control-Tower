@@ -13,13 +13,26 @@ const collision: MergeCaseView = {
 };
 
 test("shows the merge-case queue with its honest confidence label", () => {
-  render(<ResolutionWorkbench mergeCases={[collision]} onResolve={() => {}} />);
+  render(
+    <ResolutionWorkbench
+      mergeCases={[collision]}
+      canResolve={false}
+      onResolve={() => {}}
+    />,
+  );
   expect(screen.getByTestId("merge-case")).toBeInTheDocument();
   expect(screen.getByTestId("case-confidence")).toHaveTextContent("Low");
+  expect(screen.queryByText("Resolve")).not.toBeInTheDocument();
 });
 
 test("an empty queue is stated plainly", () => {
-  render(<ResolutionWorkbench mergeCases={[]} onResolve={() => {}} />);
+  render(
+    <ResolutionWorkbench
+      mergeCases={[]}
+      canResolve={false}
+      onResolve={() => {}}
+    />,
+  );
   expect(screen.getByTestId("queue-empty")).toBeInTheDocument();
 });
 
@@ -28,6 +41,7 @@ test("the resolve action invokes the operator callback with the case id", () => 
   render(
     <ResolutionWorkbench
       mergeCases={[collision]}
+      canResolve
       onResolve={(id) => (resolved = id)}
     />,
   );

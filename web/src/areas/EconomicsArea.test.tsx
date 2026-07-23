@@ -35,3 +35,10 @@ test("a soft-evidence ROI is shown as a range, not a single number", () => {
   expect(screen.getByTestId("roi-suppressed")).toBeInTheDocument();
   expect(screen.getByTestId("roi-suppressed")).toHaveTextContent("range");
 });
+
+test("department economics are omitted when that detail was not authorized", () => {
+  render(<EconomicsArea portfolio={suppressed} />);
+  expect(
+    screen.queryByRole("heading", { name: "By department" }),
+  ).not.toBeInTheDocument();
+});

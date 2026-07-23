@@ -4,7 +4,7 @@ import type { CoverageView, PrivilegedAccessView } from "../api/types";
 // coverage is worse than none, so "no providers connected" is displayed plainly.
 export function TrustArea({
   coverage,
-  privilegedAccess = [],
+  privilegedAccess,
 }: {
   coverage: CoverageView;
   privilegedAccess?: PrivilegedAccessView[];
@@ -36,20 +36,24 @@ export function TrustArea({
           </li>
         ))}
       </ul>
-      <h3>Privileged access</h3>
-      {privilegedAccess.length === 0 ? (
-        <p data-testid="no-privileged-access">
-          No prior privileged reads recorded.
-        </p>
-      ) : (
-        <ul aria-label="Privileged access log">
-          {privilegedAccess.map((entry) => (
-            <li key={entry.accessId}>
-              <strong>{entry.actor}</strong> read {entry.resource} for{" "}
-              {entry.purpose} at {entry.occurredAt.slice(0, 10)}
-            </li>
-          ))}
-        </ul>
+      {privilegedAccess !== undefined && (
+        <>
+          <h3>Privileged access</h3>
+          {privilegedAccess.length === 0 ? (
+            <p data-testid="no-privileged-access">
+              No prior privileged reads recorded.
+            </p>
+          ) : (
+            <ul aria-label="Privileged access log">
+              {privilegedAccess.map((entry) => (
+                <li key={entry.accessId}>
+                  <strong>{entry.actor}</strong> read {entry.resource} for{" "}
+                  {entry.purpose} at {entry.occurredAt.slice(0, 10)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </section>
   );

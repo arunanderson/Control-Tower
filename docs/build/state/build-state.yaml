@@ -8,8 +8,8 @@ project:
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
 current_phase: PHASE-1 # return to the production foundation critical path; later domain slices exist in development form
 current_epic: EPIC-1-2 # production security, privacy and durable-data foundation
-current_task: P1-T03 # tenant-scoped server role and capability authorization
-status: in_progress # trusted HTTP authn/authz is complete; production readiness remains materially incomplete
+current_task: P1-T04 # SPA Entra bearer session and server-resolved experience access
+status: in_progress # trusted server authn/authz and SPA bearer integration are complete; production remains materially incomplete
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
 product_outcome:
@@ -100,6 +100,11 @@ tasks:
   - {
       id: P1-T03,
       title: "Tenant-scoped role and capability authorization",
+      status: complete,
+    }
+  - {
+      id: P1-T04,
+      title: "SPA Entra bearer session and server-resolved experience access",
       status: complete,
     }
   - {
@@ -225,12 +230,13 @@ merged_prs:
     }
   - { number: 22, title: Trusted Entra tenant and human actor request boundary }
   - { number: 23, title: Tenant-scoped role and capability authorization }
+  - { number: 24, title: SPA Entra bearer session and server-resolved access }
 open_prs: []
 next_trains:
-  - "Production foundation: SPA bearer integration, durable E18/E19, C8/C5 telemetry policy, privacy Gate 2, adversarial tenant-isolation tests and policy-as-of Gate 1."
+  - "Production foundation: durable E18/E19, C8/C5 telemetry policy, privacy Gate 2, adversarial tenant-isolation tests and policy-as-of Gate 1."
   - "Durable truth: Azure PostgreSQL/RLS, transactional event/outbox persistence, tenant watermarks/receipts, Service Bus, Key Vault and Blob/WORM adapters."
   - "Enterprise acquisition through C4: Microsoft/Purview/Defender, identity/network/SaaS/cloud/API providers, then tenant-bound browser and endpoint collectors under DEV-002."
   - "P5-T04 retention mechanism remains behind an authoritative versioned Legal-owned jurisdiction-policy provider; production policy values are a human gate."
   - "P0-T16 rerun requires representative agent archetypes and an Agent 365 licence; current sandbox findings are informative but inconclusive."
-test_summary: "170 backend tests green (Platform 10, Ledger 27, Governance 17, Economics 20, Providers 24, Architecture 5, Host.Web 67) + 10 SPA (vitest); 0 vulnerable production packages"
-last_updated_by: P1-T03
+test_summary: "170 backend tests green (Platform 10, Ledger 27, Governance 17, Economics 20, Providers 24, Architecture 5, Host.Web 67) + 114 SPA tests (13 vitest files); 0 vulnerable production packages"
+last_updated_by: P1-T04
