@@ -150,7 +150,7 @@ targeted credential/private-key pattern scan across every changed file
 
 ## CI
 
-Pull request checks: pending PR creation.
+Pull request checks: https://github.com/arunanderson/Control-Tower/pull/23/checks
 
 ## Rollback
 
