@@ -39,7 +39,8 @@ PRs #1–#18 delivered the build rails, modular host, in-memory development foun
 observation ingestion, entity resolution, resolution workbench, coverage/freshness, privileged-read
 audit, provider sweep jobs, reporting snapshots and legal holds. PR #19 reconciled the build record.
 PR #20 recorded the Microsoft sandbox readiness findings. PR #21 records the enterprise-observability
-scope amendment and production delivery plan.
+scope amendment and production delivery plan. PR #22 establishes the trusted Entra tenant and human
+actor request boundary.
 
 These are **implemented development slices**, not evidence that the production SaaS is finished.
 

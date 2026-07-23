@@ -118,7 +118,7 @@ rg 'X-Tenant-Id|X-Operator|X-Actor' src/Host/ControlTower.Host.Web
 
 ## CI
 
-Pull request checks: pending.
+Pull request checks: https://github.com/arunanderson/Control-Tower/pull/22/checks
 
 ## Rollback
 
