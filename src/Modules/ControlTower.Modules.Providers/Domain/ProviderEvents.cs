@@ -15,6 +15,7 @@ public abstract record ProviderEvent : IDomainEvent
 /// types cross the module boundary), so the resolution engine reconstructs the native identifier
 /// independently. Unchanged (suppressed) observations do not emit this event.
 /// </summary>
+[DomainEventContract("ObservationIngested", EventPrivilege.Standard)]
 public sealed record ObservationIngested : ProviderEvent
 {
     public required Guid ObservationId { get; init; }
@@ -48,6 +49,7 @@ public sealed record ObservationIngested : ProviderEvent
 /// Self-contained coverage fact emitted after an ingestion run is durably recorded. C1.6 consumes
 /// this through the outbox; it never reads the provider store (I3).
 /// </summary>
+[DomainEventContract("ProviderCoverageUpdated", EventPrivilege.Standard)]
 public sealed record ProviderCoverageUpdated : ProviderEvent
 {
     public required Guid RunId { get; init; }
@@ -65,6 +67,7 @@ public sealed record ProviderCoverageUpdated : ProviderEvent
 }
 
 /// <summary>Self-contained, secret-free request for the worker to execute a configured provider sweep.</summary>
+[DomainEventContract("ProviderSweepRequested", EventPrivilege.Standard)]
 public sealed record ProviderSweepRequested : ProviderEvent
 {
     public required Guid JobId { get; init; }

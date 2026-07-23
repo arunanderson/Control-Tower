@@ -1,23 +1,43 @@
 using System.Security.Cryptography;
-using System.Text;
 
 namespace ControlTower.Platform.Events;
 
 /// <summary>
-/// SHA-256 hash chain. Pure and deterministic (no infrastructure) — safe in the production domain.
-/// Each hash covers the previous hash plus the record's canonical payload, so any tampering with an
-/// earlier record breaks every subsequent link (ADR-021 verifiable evidence integrity).
+/// SHA-256 hash chain over the prior binary digest and the canonical stored-event envelope.
+/// Genesis contributes no prior digest. Hashes are persisted as canonical uppercase hexadecimal.
 /// </summary>
 public sealed class Sha256HashChain : IHashChain
 {
     public const string Genesis = "";
+    public const int HashByteLength = 32;
+    public const int HashTextLength = HashByteLength * 2;
 
-    public string ComputeNext(string previousHash, ReadOnlyMemory<byte> payload)
+    public string ComputeNext(
+        string previousHash,
+        ReadOnlyMemory<byte> canonicalEnvelope)
     {
-        var prevBytes = Encoding.UTF8.GetBytes(previousHash ?? string.Empty);
-        var buffer = new byte[prevBytes.Length + payload.Length];
-        prevBytes.CopyTo(buffer, 0);
-        payload.Span.CopyTo(buffer.AsSpan(prevBytes.Length));
-        return Convert.ToHexString(SHA256.HashData(buffer));
+        ArgumentNullException.ThrowIfNull(previousHash);
+
+        using var incremental = IncrementalHash.CreateHash(
+            HashAlgorithmName.SHA256);
+        if (!string.Equals(previousHash, Genesis, StringComparison.Ordinal))
+        {
+            if (!IsCanonicalHash(previousHash))
+            {
+                throw new EventIntegrityException(
+                    "The previous event hash is invalid.");
+            }
+            var previous = Convert.FromHexString(previousHash);
+            incremental.AppendData(previous);
+        }
+
+        incremental.AppendData(canonicalEnvelope.Span);
+        return Convert.ToHexString(incremental.GetHashAndReset());
     }
+
+    public static bool IsCanonicalHash(string? value) =>
+        value is { Length: HashTextLength }
+        && value.All(character =>
+            character is >= '0' and <= '9'
+            or >= 'A' and <= 'F');
 }

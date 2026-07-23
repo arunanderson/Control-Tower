@@ -9,6 +9,7 @@ public abstract record EconomicsEvent : IDomainEvent
     public DateTimeOffset OccurredAt { get; init; } = DateTimeOffset.UtcNow;
 }
 
+[DomainEventContract("CostFactIngested", EventPrivilege.Standard)]
 public sealed record CostObserved : EconomicsEvent
 {
     public required Guid AssetId { get; init; }
@@ -17,6 +18,7 @@ public sealed record CostObserved : EconomicsEvent
     public required string EvidenceClass { get; init; }
 }
 
+[DomainEventContract("ValueDeclared", EventPrivilege.Standard)]
 public sealed record ValueDeclared : EconomicsEvent
 {
     public required Guid AssetId { get; init; }
@@ -26,6 +28,7 @@ public sealed record ValueDeclared : EconomicsEvent
     public required string ValidationState { get; init; }
 }
 
+[DomainEventContract("ValueRevised", EventPrivilege.Standard)]
 public sealed record ValueRevisedEvent : EconomicsEvent
 {
     public required Guid AssetId { get; init; }
@@ -33,6 +36,7 @@ public sealed record ValueRevisedEvent : EconomicsEvent
     public required string Reason { get; init; }
 }
 
+[DomainEventContract("ReportingPeriodFrozen", EventPrivilege.Standard)]
 public sealed record ReportingPeriodFrozen : EconomicsEvent
 {
     public required Guid PeriodId { get; init; }
@@ -42,6 +46,7 @@ public sealed record ReportingPeriodFrozen : EconomicsEvent
     public required string SignedBy { get; init; }
 }
 
+[DomainEventContract("ReportingPeriodRestated", EventPrivilege.Standard)]
 public sealed record ReportingPeriodRestated : EconomicsEvent
 {
     public required Guid PeriodId { get; init; }

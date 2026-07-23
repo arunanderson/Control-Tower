@@ -86,6 +86,7 @@ public sealed record LegalHoldView(
     string? ReleaseReason,
     string? ApprovalReference);
 
+[DomainEventContract("LegalHoldPlaced", EventPrivilege.Privileged)]
 public sealed record LegalHoldPlaced : IDomainEvent
 {
     public Guid EventId { get; init; } = Guid.NewGuid();
@@ -97,6 +98,7 @@ public sealed record LegalHoldPlaced : IDomainEvent
     public required string PlacedBy { get; init; }
 }
 
+[DomainEventContract("LegalHoldReleased", EventPrivilege.Privileged)]
 public sealed record LegalHoldReleased : IDomainEvent
 {
     public Guid EventId { get; init; } = Guid.NewGuid();

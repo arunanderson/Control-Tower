@@ -9,6 +9,7 @@ public abstract record GovernanceEvent : IDomainEvent
     public DateTimeOffset OccurredAt { get; init; } = DateTimeOffset.UtcNow;
 }
 
+[DomainEventContract("CaseOpened", EventPrivilege.Standard)]
 public sealed record CaseOpened : GovernanceEvent
 {
     public required GovernanceCaseId CaseId { get; init; }
@@ -17,6 +18,7 @@ public sealed record CaseOpened : GovernanceEvent
     public required RiskTier Tier { get; init; }
 }
 
+[DomainEventContract("DecisionRecorded", EventPrivilege.Standard)]
 public sealed record DecisionRecorded : GovernanceEvent
 {
     public required GovernanceCaseId CaseId { get; init; }
@@ -26,17 +28,20 @@ public sealed record DecisionRecorded : GovernanceEvent
     public required string Reason { get; init; }
 }
 
+[DomainEventContract("CaseApproved", EventPrivilege.Standard)]
 public sealed record CaseApproved : GovernanceEvent
 {
     public required GovernanceCaseId CaseId { get; init; }
 }
 
+[DomainEventContract("CaseRejected", EventPrivilege.Standard)]
 public sealed record CaseRejected : GovernanceEvent
 {
     public required GovernanceCaseId CaseId { get; init; }
     public required string Reason { get; init; }
 }
 
+[DomainEventContract("WaiverGranted", EventPrivilege.Standard)]
 public sealed record WaiverGranted : GovernanceEvent
 {
     public required GovernanceCaseId CaseId { get; init; }
@@ -44,18 +49,21 @@ public sealed record WaiverGranted : GovernanceEvent
     public required string Reason { get; init; }
 }
 
+[DomainEventContract("CaseExpired", EventPrivilege.Standard)]
 public sealed record CaseExpired : GovernanceEvent
 {
     public required GovernanceCaseId CaseId { get; init; }
     public required string Reason { get; init; }
 }
 
+[DomainEventContract("RecertificationCompleted", EventPrivilege.Standard)]
 public sealed record RecertificationCompleted : GovernanceEvent
 {
     public required GovernanceCaseId CaseId { get; init; }
     public required DateTimeOffset NextDueAt { get; init; }
 }
 
+[DomainEventContract("RetirementRequested", EventPrivilege.Standard)]
 public sealed record RetirementRequested : GovernanceEvent
 {
     public required GovernanceCaseId CaseId { get; init; }
@@ -63,6 +71,7 @@ public sealed record RetirementRequested : GovernanceEvent
     public required string Reason { get; init; }
 }
 
+[DomainEventContract("ReuseDecisionRecorded", EventPrivilege.Standard)]
 public sealed record ReuseDecisionRecorded : GovernanceEvent
 {
     public required GovernanceCaseId CaseId { get; init; }
@@ -72,6 +81,7 @@ public sealed record ReuseDecisionRecorded : GovernanceEvent
     public required string Actor { get; init; }
 }
 
+[DomainEventContract("NotificationIntentRaised", EventPrivilege.Standard)]
 public sealed record NotificationIntentRaised : GovernanceEvent
 {
     public required GovernanceCaseId CaseId { get; init; }
@@ -81,6 +91,7 @@ public sealed record NotificationIntentRaised : GovernanceEvent
 }
 
 /// <summary>An intent to invoke a native control (ADR-002). C2 records the request only — it never enforces.</summary>
+[DomainEventContract("NativeControlRequested", EventPrivilege.Standard)]
 public sealed record NativeControlRequested : GovernanceEvent
 {
     public required GovernanceCaseId CaseId { get; init; }
@@ -88,6 +99,7 @@ public sealed record NativeControlRequested : GovernanceEvent
     public required string Target { get; init; }
 }
 
+[DomainEventContract("GovernanceDebtRaised", EventPrivilege.Standard)]
 public sealed record GovernanceDebtRaised : GovernanceEvent
 {
     public required Guid AssetId { get; init; }

@@ -10,6 +10,7 @@ public sealed record PrivilegedAccessLogEntry(
     PrivilegedReadRecord Record,
     string CorrelationId);
 
+[DomainEventContract("PrivilegedReadRecorded", EventPrivilege.Privileged)]
 public sealed record PrivilegedReadRecorded : IDomainEvent
 {
     public Guid EventId { get; init; } = Guid.NewGuid();
