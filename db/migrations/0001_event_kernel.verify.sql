@@ -66,6 +66,87 @@ BEGIN
 
     IF (
         SELECT count(*)
+        FROM pg_constraint AS constraint_record
+        INNER JOIN pg_class AS relation
+            ON relation.oid = constraint_record.conrelid
+        INNER JOIN pg_namespace AS namespace
+            ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = 'event_store'
+          AND relation.relname = 'stream_heads') <> 4
+       OR EXISTS (
+            SELECT expected.name
+            FROM (
+                VALUES
+                    ('pk_stream_heads'),
+                    ('ck_stream_heads_tenant_nonempty'),
+                    ('ck_stream_heads_position'),
+                    ('ck_stream_heads_hash')
+            ) AS expected(name)
+            EXCEPT
+            SELECT constraint_record.conname::text
+            FROM pg_constraint AS constraint_record
+            INNER JOIN pg_class AS relation
+                ON relation.oid = constraint_record.conrelid
+            INNER JOIN pg_namespace AS namespace
+                ON namespace.oid = relation.relnamespace
+            WHERE namespace.nspname = 'event_store'
+              AND relation.relname = 'stream_heads')
+    THEN
+        RAISE EXCEPTION 'stream-head constraints are incomplete';
+    END IF;
+
+    IF (
+        SELECT count(*)
+        FROM pg_constraint AS constraint_record
+        INNER JOIN pg_class AS relation
+            ON relation.oid = constraint_record.conrelid
+        INNER JOIN pg_namespace AS namespace
+            ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = 'event_store'
+          AND relation.relname = 'domain_events') <> 23
+       OR EXISTS (
+            SELECT expected.name
+            FROM (
+                VALUES
+                    ('pk_domain_events'),
+                    ('uq_domain_events_tenant_position'),
+                    ('ck_domain_events_integrity_format'),
+                    ('ck_domain_events_tenant_nonempty'),
+                    ('ck_domain_events_position'),
+                    ('ck_domain_events_event_id_nonempty'),
+                    ('ck_domain_events_event_type'),
+                    ('ck_domain_events_aggregate_kind'),
+                    ('ck_domain_events_aggregate_value'),
+                    ('ck_domain_events_actor_kind'),
+                    ('ck_domain_events_actor_opaque_id'),
+                    ('ck_domain_events_human_actor'),
+                    ('ck_domain_events_system_actor'),
+                    ('ck_domain_events_provider_actor'),
+                    ('ck_domain_events_occurred_at_finite'),
+                    ('ck_domain_events_recorded_at_finite'),
+                    ('ck_domain_events_reason'),
+                    ('ck_domain_events_correlation_pair'),
+                    ('ck_domain_events_correlation_kind'),
+                    ('ck_domain_events_correlation_value'),
+                    ('ck_domain_events_privilege'),
+                    ('ck_domain_events_previous_hash'),
+                    ('ck_domain_events_hash')
+            ) AS expected(name)
+            EXCEPT
+            SELECT constraint_record.conname::text
+            FROM pg_constraint AS constraint_record
+            INNER JOIN pg_class AS relation
+                ON relation.oid = constraint_record.conrelid
+            INNER JOIN pg_namespace AS namespace
+                ON namespace.oid = relation.relnamespace
+            WHERE namespace.nspname = 'event_store'
+              AND relation.relname = 'domain_events')
+    THEN
+        RAISE EXCEPTION 'domain-event constraints are incomplete';
+    END IF;
+
+    IF (
+        SELECT count(*)
         FROM pg_proc AS procedure
         INNER JOIN pg_namespace AS namespace
             ON namespace.oid = procedure.pronamespace

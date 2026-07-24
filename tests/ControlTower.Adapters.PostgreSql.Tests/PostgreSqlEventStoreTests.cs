@@ -2,6 +2,7 @@ using ControlTower.Platform.Events;
 using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 using Npgsql;
+using NpgsqlTypes;
 
 namespace ControlTower.Adapters.PostgreSql.Tests;
 
@@ -694,6 +695,71 @@ public sealed class PostgreSqlEventStoreTests(
         }
     }
 
+    [Fact]
+    public async Task Database_constraints_reject_unrehydratable_event_shapes()
+    {
+        if (!fixture.Enabled)
+            return;
+
+        var cases = new Action<NpgsqlParameterCollection>[]
+        {
+            parameters =>
+                parameters["integrity_format_version"].Value = 1,
+            parameters =>
+                parameters["event_id"].Value = Guid.Empty,
+            parameters =>
+            {
+                parameters["actor_kind"].Value =
+                    (short)AuditActorKind.Human;
+                parameters["actor_opaque_id"].Value =
+                    "00000000-0000-0000-0000-000000000000";
+            },
+            parameters =>
+            {
+                parameters["actor_kind"].Value =
+                    (short)AuditActorKind.System;
+                parameters["actor_opaque_id"].Value =
+                    "admin@example.com";
+            },
+            parameters =>
+            {
+                parameters["correlation_kind"].Value = "request";
+                parameters["correlation_value"].Value = DBNull.Value;
+            },
+            parameters =>
+                parameters["privilege"].Value = (short)9,
+            parameters =>
+                parameters["previous_hash"].Value =
+                    new string('A', Sha256HashChain.HashTextLength),
+            parameters =>
+                parameters["hash"].Value =
+                    new string('a', Sha256HashChain.HashTextLength),
+        };
+
+        foreach (var mutate in cases)
+        {
+            var tenant = NewTenant();
+            await using var connection =
+                await fixture.MigrationDataSource.OpenConnectionAsync();
+            await using var transaction =
+                await connection.BeginTransactionAsync();
+            await BindTenantAsync(connection, transaction, tenant);
+            await using var command =
+                BuildDirectInsertCommand(
+                    connection,
+                    transaction,
+                    tenant);
+            mutate(command.Parameters);
+
+            var rejected = await Assert.ThrowsAsync<PostgresException>(
+                () => command.ExecuteNonQueryAsync());
+            Assert.Equal("23514", rejected.SqlState);
+            Assert.Equal(
+                (0L, 0L),
+                await CountTenantStateAsync(tenant));
+        }
+    }
+
     private PostgreSqlEventStore CreateStore(
         ITenantContextAccessor tenants,
         TimeProvider? timeProvider = null) =>
@@ -795,6 +861,111 @@ public sealed class PostgreSqlEventStoreTests(
              """,
             connection);
         _ = await command.ExecuteNonQueryAsync();
+    }
+
+    private static NpgsqlCommand BuildDirectInsertCommand(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        TenantId tenant)
+    {
+        var command = new NpgsqlCommand(
+            """
+            INSERT INTO event_store.domain_events (
+                integrity_format_version,
+                tenant_id,
+                position,
+                event_id,
+                event_type,
+                aggregate_kind,
+                aggregate_value,
+                actor_kind,
+                actor_opaque_id,
+                occurred_at,
+                recorded_at,
+                reason,
+                correlation_kind,
+                correlation_value,
+                privilege,
+                previous_hash,
+                hash,
+                payload)
+            VALUES (
+                @integrity_format_version,
+                @tenant_id,
+                @position,
+                @event_id,
+                @event_type,
+                @aggregate_kind,
+                @aggregate_value,
+                @actor_kind,
+                @actor_opaque_id,
+                @occurred_at,
+                @recorded_at,
+                @reason,
+                @correlation_kind,
+                @correlation_value,
+                @privilege,
+                @previous_hash,
+                @hash,
+                @payload);
+            """,
+            connection,
+            transaction);
+        command.Parameters.Add(
+                "integrity_format_version",
+                NpgsqlDbType.Integer)
+            .Value = 2;
+        command.Parameters.Add("tenant_id", NpgsqlDbType.Uuid).Value =
+            tenant.Value;
+        command.Parameters.Add("position", NpgsqlDbType.Bigint).Value =
+            1L;
+        command.Parameters.Add("event_id", NpgsqlDbType.Uuid).Value =
+            Guid.NewGuid();
+        command.Parameters.Add("event_type", NpgsqlDbType.Varchar).Value =
+            "tests.postgresql.constraint.v1";
+        command.Parameters.Add(
+                "aggregate_kind",
+                NpgsqlDbType.Varchar)
+            .Value = "test-aggregate";
+        command.Parameters.Add(
+                "aggregate_value",
+                NpgsqlDbType.Varchar)
+            .Value = Guid.NewGuid().ToString("D");
+        command.Parameters.Add("actor_kind", NpgsqlDbType.Smallint).Value =
+            (short)AuditActorKind.System;
+        command.Parameters.Add(
+                "actor_opaque_id",
+                NpgsqlDbType.Varchar)
+            .Value = "constraint-test";
+        command.Parameters.Add(
+                "occurred_at",
+                NpgsqlDbType.TimestampTz)
+            .Value = DateTime.UtcNow;
+        command.Parameters.Add(
+                "recorded_at",
+                NpgsqlDbType.TimestampTz)
+            .Value = DateTime.UtcNow;
+        command.Parameters.Add("reason", NpgsqlDbType.Varchar).Value =
+            DBNull.Value;
+        command.Parameters.Add(
+                "correlation_kind",
+                NpgsqlDbType.Varchar)
+            .Value = DBNull.Value;
+        command.Parameters.Add(
+                "correlation_value",
+                NpgsqlDbType.Varchar)
+            .Value = DBNull.Value;
+        command.Parameters.Add("privilege", NpgsqlDbType.Smallint).Value =
+            (short)EventPrivilege.Standard;
+        command.Parameters.Add(
+                "previous_hash",
+                NpgsqlDbType.Varchar)
+            .Value = Sha256HashChain.Genesis;
+        command.Parameters.Add("hash", NpgsqlDbType.Varchar).Value =
+            new string('A', Sha256HashChain.HashTextLength);
+        command.Parameters.Add("payload", NpgsqlDbType.Bytea).Value =
+            Array.Empty<byte>();
+        return command;
     }
 
     private async Task RemoveFailingHeadTriggerAsync()
