@@ -255,6 +255,118 @@ public interface IRoleAssignmentStore : IRoleAssignmentReader
         CancellationToken ct = default);
 }
 
+/// <summary>
+/// Shared E18 commit invariants consumed by development and durable adapters. This validates the
+/// frozen state/event/audit tuple without introducing another persistence or authorization model.
+/// </summary>
+public static class RoleAssignmentCommitSemantics
+{
+    public static void Validate(
+        RoleAssignment assignment,
+        RoleAssignmentChanged changed,
+        EventAppendMetadata metadata,
+        long expectedVersion)
+    {
+        ArgumentNullException.ThrowIfNull(assignment);
+        ArgumentNullException.ThrowIfNull(changed);
+        ArgumentNullException.ThrowIfNull(metadata);
+        if (expectedVersion < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(expectedVersion),
+                "The expected version cannot be negative.");
+        }
+
+        var expectedChange =
+            assignment.IsActive ? "Assigned" : "Revoked";
+        var expectedActor = assignment.IsActive
+            ? assignment.AssignedBy
+            : assignment.RevokedBy!.Value;
+        var expectedOccurredAt = assignment.IsActive
+            ? assignment.AssignedAt
+            : assignment.RevokedAt!.Value;
+        if (!IsCanonicalTimestamp(assignment.AssignedAt)
+            || assignment.RevokedAt is { } revokedAt
+                && !IsCanonicalTimestamp(revokedAt)
+            || !IsCanonicalTimestamp(changed.OccurredAt)
+            || changed.AssignmentId != assignment.Id
+            || changed.EventId == Guid.Empty
+            || changed.SubjectPersonKey
+            != assignment.SubjectPersonKey
+            || changed.Role
+            != ControlTowerAccessCatalog.Name(assignment.Role)
+            || changed.OrganizationScope
+            != assignment.OrganizationScope.ToString()
+            || changed.Change != expectedChange
+            || changed.ChangedBy != expectedActor
+            || changed.Version != assignment.Version
+            || !changed.OccurredAt.EqualsExact(
+                expectedOccurredAt)
+            || metadata.AggregateReference
+            != EventReference.For(
+                "role-assignment",
+                assignment.Id)
+            || metadata.Actor != expectedActor
+            || metadata.Reason is not null
+            || metadata.CorrelationReference
+                is not { Kind: "role-assignment-command" }
+                    correlation
+            || !Guid.TryParseExact(
+                correlation.Value,
+                "D",
+                out var correlationId)
+            || correlationId == Guid.Empty)
+        {
+            throw new InvalidOperationException(
+                "Role-assignment state, event and audit metadata do not match.");
+        }
+
+        if (expectedVersion == 0)
+        {
+            if (!assignment.IsActive
+                || assignment.Version != 1)
+            {
+                throw new InvalidOperationException(
+                    "A role-assignment create must produce active version 1.");
+            }
+        }
+        else if (assignment.IsActive
+                 || assignment.Version
+                 != checked(expectedVersion + 1))
+        {
+            throw new InvalidOperationException(
+                "A role-assignment transition has an invalid version.");
+        }
+    }
+
+    public static bool IsTransitionFrom(
+        RoleAssignment current,
+        RoleAssignment next)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(next);
+        return current.Id == next.Id
+            && current.Tenant == next.Tenant
+            && current.SubjectPersonKey == next.SubjectPersonKey
+            && current.Role == next.Role
+            && current.OrganizationScope
+            == next.OrganizationScope
+            && current.AssignedBy == next.AssignedBy
+            && IsCanonicalTimestamp(current.AssignedAt)
+            && IsCanonicalTimestamp(next.AssignedAt)
+            && current.AssignedAt.EqualsExact(next.AssignedAt)
+            && next.Version == current.Version + 1
+            && !next.IsActive;
+    }
+
+    private static bool IsCanonicalTimestamp(
+        DateTimeOffset value) =>
+        value.Offset == TimeSpan.Zero
+        && value.EqualsExact(
+            EventEnvelopeCanonicalizer.NormalizeTimestamp(
+                value));
+}
+
 /// <summary>Production-safe default until a durable C8 adapter is composed: no assignment, no access.</summary>
 public sealed class DenyAllRoleAssignmentReader : IRoleAssignmentReader
 {

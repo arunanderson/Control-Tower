@@ -29,7 +29,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Adapters\ControlTower.Adapters.PostgreSql\ControlTower.Adapters.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\src\Adapters\ControlTower.Adapters.PostgreSql.Trust\ControlTower.Adapters.PostgreSql.Trust.csproj" />
     <ProjectReference Include="..\..\src\ControlTower.Platform\ControlTower.Platform.csproj" />
+    <ProjectReference Include="..\..\src\Modules\ControlTower.Modules.Audit\ControlTower.Modules.Audit.csproj" />
+    <ProjectReference Include="..\..\src\Modules\ControlTower.Modules.Trust\ControlTower.Modules.Trust.csproj" />
   </ItemGroup>
 
 </Project>

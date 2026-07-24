@@ -34,7 +34,7 @@ public sealed class InMemoryPersonKeyMap(
         try
         {
             if (directoryObjectId != Guid.Empty)
-                RejectRawIdentityContext(
+                PersonKeyMapSemantics.RejectRawIdentityContext(
                     access,
                     directoryObjectId,
                     displaySnapshot: null);
@@ -110,7 +110,7 @@ public sealed class InMemoryPersonKeyMap(
                     : null;
             if (identity is not null)
             {
-                RejectRawIdentityContext(
+                PersonKeyMapSemantics.RejectRawIdentityContext(
                     access,
                     identity.DirectoryObjectId,
                     identity.DisplaySnapshot);
@@ -142,7 +142,7 @@ public sealed class InMemoryPersonKeyMap(
         await _gate.WaitAsync(ct);
         try
         {
-            RejectRawIdentityContext(
+            PersonKeyMapSemantics.RejectRawIdentityContext(
                 access,
                 identity.DirectoryObjectId,
                 identity.DisplaySnapshot);
@@ -176,24 +176,13 @@ public sealed class InMemoryPersonKeyMap(
 
             var personKey = PersonKey.New();
             const long version = 1;
-            var changed = new PersonKeyMapChanged
-            {
-                PersonKey = personKey,
-                Version = version,
-                Change = "Created",
-                OccurredAt =
-                    EventEnvelopeCanonicalizer.NormalizeTimestamp(
-                        clock.GetUtcNow()),
-            };
+            var changed = PersonKeyMapSemantics.Created(
+                personKey,
+                EventEnvelopeCanonicalizer.NormalizeTimestamp(
+                    clock.GetUtcNow()));
             await events.AppendAsync(
                 changed,
-                new EventAppendMetadata(
-                    EventReference.For(
-                        "person-key",
-                        personKey.Value),
-                    access.Actor,
-                    access.Purpose,
-                    access.CorrelationReference),
+                PersonKeyMapSemantics.Metadata(personKey, access),
                 JsonSerializer.SerializeToUtf8Bytes(changed),
                 ct);
 
@@ -257,7 +246,7 @@ public sealed class InMemoryPersonKeyMap(
 
             if (entry.Identity is { } identity)
             {
-                RejectRawIdentityContext(
+                PersonKeyMapSemantics.RejectRawIdentityContext(
                     access,
                     identity.DirectoryObjectId,
                     identity.DisplaySnapshot);
@@ -287,24 +276,13 @@ public sealed class InMemoryPersonKeyMap(
             }
 
             var nextVersion = checked(entry.Version + 1);
-            var changed = new PersonKeyMapChanged
-            {
-                PersonKey = personKey,
-                Version = nextVersion,
-                Change = "Severed",
-                OccurredAt =
-                    EventEnvelopeCanonicalizer.NormalizeTimestamp(
-                        clock.GetUtcNow()),
-            };
+            var changed = PersonKeyMapSemantics.Severed(
+                personKey,
+                EventEnvelopeCanonicalizer.NormalizeTimestamp(
+                    clock.GetUtcNow()));
             await events.AppendAsync(
                 changed,
-                new EventAppendMetadata(
-                    EventReference.For(
-                        "person-key",
-                        personKey.Value),
-                    access.Actor,
-                    access.Purpose,
-                    access.CorrelationReference),
+                PersonKeyMapSemantics.Metadata(personKey, access),
                 JsonSerializer.SerializeToUtf8Bytes(changed),
                 ct);
 
@@ -329,58 +307,13 @@ public sealed class InMemoryPersonKeyMap(
         EventReference resource,
         CancellationToken ct)
     {
-        var record = new PrivilegedReadRecord(
-            Guid.NewGuid(),
+        var record = PersonKeyMapSemantics.ReadRecord(
             tenant,
-            access.Actor,
+            access,
             resource,
-            access.Purpose,
-            access.Policy,
-            access.CorrelationReference,
             EventEnvelopeCanonicalizer.NormalizeTimestamp(
                 clock.GetUtcNow()));
         await auditor.RecordAsync(record, ct);
-    }
-
-    private static void RejectRawIdentityContext(
-        PersonKeyAccessContext access,
-        Guid directoryObjectId,
-        string? displaySnapshot)
-    {
-        var directoryId = directoryObjectId.ToString("D");
-        var compactDirectoryId =
-            directoryObjectId.ToString("N");
-        foreach (var value in ContextValues(access))
-        {
-            if (value.Contains(
-                    directoryId,
-                    StringComparison.OrdinalIgnoreCase)
-                || value.Contains(
-                    compactDirectoryId,
-                    StringComparison.OrdinalIgnoreCase)
-                || (displaySnapshot is not null
-                    && value.Contains(
-                        displaySnapshot,
-                        StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new InvalidOperationException(
-                    "Raw directory identity is forbidden in person-key access evidence.");
-            }
-        }
-    }
-
-    private static IEnumerable<string> ContextValues(
-        PersonKeyAccessContext access)
-    {
-        yield return access.Actor.OpaqueId;
-        yield return access.Purpose;
-        yield return access.CorrelationReference.Kind;
-        yield return access.CorrelationReference.Value;
-        if (access.Policy.Version is { } version)
-        {
-            yield return version.Kind;
-            yield return version.Value;
-        }
     }
 
     private TenantBucket BucketFor(TenantId tenant) =>
