@@ -1,8 +1,11 @@
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using ControlTower.Platform.Audit;
 using ControlTower.Platform.Events;
 using ControlTower.Platform.Identity;
+using ControlTower.Platform.Tenancy;
 
 namespace ControlTower.Modules.Trust.Authorization;
 
@@ -181,6 +184,139 @@ public interface IPersonKeyMap : IPersonKeyReader
         long expectedVersion,
         PersonKeyAccessContext access,
         CancellationToken ct = default);
+}
+
+/// <summary>
+/// Shared C8 invariants for every E19 adapter. The helpers keep raw identity out of evidence and
+/// construct the one canonical privileged read and mutation-event shape without exposing another
+/// identity model.
+/// </summary>
+public static class PersonKeyMapSemantics
+{
+    public static void RejectRawIdentityContext(
+        PersonKeyAccessContext access,
+        Guid directoryObjectId,
+        string? displaySnapshot)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        if (directoryObjectId == Guid.Empty)
+            return;
+
+        Span<char> directoryId = stackalloc char[36];
+        Span<char> compactDirectoryId = stackalloc char[32];
+        if (!directoryObjectId.TryFormat(
+                directoryId,
+                out var directoryLength,
+                "D")
+            || directoryLength != directoryId.Length
+            || !directoryObjectId.TryFormat(
+                compactDirectoryId,
+                out var compactLength,
+                "N")
+            || compactLength != compactDirectoryId.Length)
+        {
+            throw new InvalidOperationException(
+                "Raw directory identity validation failed.");
+        }
+
+        try
+        {
+            foreach (var value in ContextValues(access))
+            {
+                if (value.AsSpan().Contains(
+                        directoryId,
+                        StringComparison.OrdinalIgnoreCase)
+                    || value.AsSpan().Contains(
+                        compactDirectoryId,
+                        StringComparison.OrdinalIgnoreCase)
+                    || (displaySnapshot is not null
+                        && value.Contains(
+                            displaySnapshot,
+                            StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new InvalidOperationException(
+                        "Raw directory identity is forbidden in person-key access evidence.");
+                }
+            }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(
+                MemoryMarshal.AsBytes(directoryId));
+            CryptographicOperations.ZeroMemory(
+                MemoryMarshal.AsBytes(compactDirectoryId));
+        }
+    }
+
+    public static PrivilegedReadRecord ReadRecord(
+        TenantId tenant,
+        PersonKeyAccessContext access,
+        EventReference resource,
+        DateTimeOffset occurredAt) =>
+        new(
+            Guid.NewGuid(),
+            tenant,
+            access.Actor,
+            resource,
+            access.Purpose,
+            access.Policy,
+            access.CorrelationReference,
+            occurredAt);
+
+    public static PersonKeyMapChanged Created(
+        PersonKey personKey,
+        DateTimeOffset occurredAt) =>
+        Changed(personKey, version: 1, "Created", occurredAt);
+
+    public static PersonKeyMapChanged Severed(
+        PersonKey personKey,
+        DateTimeOffset occurredAt) =>
+        Changed(personKey, version: 2, "Severed", occurredAt);
+
+    public static EventAppendMetadata Metadata(
+        PersonKey personKey,
+        PersonKeyAccessContext access) =>
+        new(
+            EventReference.For(
+                "person-key",
+                personKey.Value),
+            access.Actor,
+            access.Purpose,
+            access.CorrelationReference);
+
+    private static PersonKeyMapChanged Changed(
+        PersonKey personKey,
+        long version,
+        string change,
+        DateTimeOffset occurredAt)
+    {
+        if (!personKey.IsValid)
+            throw new ArgumentException(
+                "A non-empty PersonKey is required.",
+                nameof(personKey));
+
+        return new PersonKeyMapChanged
+        {
+            PersonKey = personKey,
+            Version = version,
+            Change = change,
+            OccurredAt = occurredAt,
+        };
+    }
+
+    private static IEnumerable<string> ContextValues(
+        PersonKeyAccessContext access)
+    {
+        yield return access.Actor.OpaqueId;
+        yield return access.Purpose;
+        yield return access.CorrelationReference.Kind;
+        yield return access.CorrelationReference.Value;
+        if (access.Policy.Version is { } version)
+        {
+            yield return version.Kind;
+            yield return version.Value;
+        }
+    }
 }
 
 /// <summary>Production-safe default until the field-protected durable E19 adapter is composed.</summary>

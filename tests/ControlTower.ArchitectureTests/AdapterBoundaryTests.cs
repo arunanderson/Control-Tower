@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using ControlTower.Adapters.PostgreSql;
+using ControlTower.Adapters.PostgreSql.Trust;
 using ControlTower.Platform;
 using NetArchTest.Rules;
 using Xunit;
@@ -54,6 +55,52 @@ public class AdapterBoundaryTests
             .InAssembly(typeof(PostgreSqlEventStore).Assembly)
             .Should()
             .NotHaveDependencyOnAny("ControlTower.Modules")
+            .GetResult();
+        Assert.True(
+            result.IsSuccessful,
+            Join(result.FailingTypeNames));
+    }
+
+    [Fact]
+    public void Trust_PostgreSql_outer_adapter_has_only_the_bounded_dependencies()
+    {
+        var assembly =
+            typeof(PostgreSqlRoleAssignmentStore).Assembly;
+        var controlTowerReferences = assembly
+            .GetReferencedAssemblies()
+            .Select(reference => reference.Name)
+            .OfType<string>()
+            .Where(name => name.StartsWith(
+                    "ControlTower.",
+                    StringComparison.Ordinal))
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "ControlTower.Adapters.PostgreSql",
+                "ControlTower.Modules.Trust",
+                "ControlTower.Platform",
+            ],
+            controlTowerReferences);
+        Assert.Contains(
+            assembly.GetReferencedAssemblies(),
+            reference => string.Equals(
+                reference.Name,
+                "Npgsql",
+                StringComparison.Ordinal));
+
+        var result = Types.InAssembly(assembly)
+            .Should()
+            .NotHaveDependencyOnAny(
+                "ControlTower.Modules.Audit",
+                "ControlTower.Modules.Economics",
+                "ControlTower.Modules.EnterpriseContext",
+                "ControlTower.Modules.Experience",
+                "ControlTower.Modules.Governance",
+                "ControlTower.Modules.Ledger",
+                "ControlTower.Modules.Providers",
+                "ControlTower.Host")
             .GetResult();
         Assert.True(
             result.IsSuccessful,

@@ -5,8 +5,8 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | Field               | Value                                                                                                        |
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Current phase**   | Phase 1 — production security, privacy and durable-data foundation                                           |
-| **Current task**    | P1-T07 — persist the E20 event kernel in PostgreSQL                                                          |
-| **Overall state**   | **Migration 0001 and the durable E20 adapter are complete and green in ephemeral PostgreSQL CI.**            |
+| **Current task**    | P1-T08 — persist the C8 E18/E19 foundations in PostgreSQL                                                    |
+| **Overall state**   | **P1-T08 is complete and green; the next implementation requires an approved bounded task contract.**        |
 | **Product outcome** | One role-appropriate Control Tower for all technically observable AI use across the corporate-managed estate |
 | **Merge policy**    | Merge trains — agent may merge tenant-independent green PRs with a Merge Readiness Report                    |
 | **Last updated**    | 2026-07-24                                                                                                   |
@@ -44,7 +44,8 @@ actor request boundary. PR #23 establishes tenant-scoped C8 role and capability 
 #24 connects the SPA to Entra delegated Bearer authentication and server-resolved access. PR #25
 hardens the canonical event envelope and integrity verifier. PR #26 completes the E20 semantic
 record and the C8 E18/E19 identity and authorization contracts. PR #27 persists the E20 kernel in
-PostgreSQL with forced RLS, immutable rows and tenant-serialized atomic append.
+PostgreSQL with forced RLS, immutable rows and tenant-serialized atomic append. PR #28 persists the
+C8 E18/E19 foundations with tenant isolation, privileged field protection and atomic E20 evidence.
 
 These are **implemented development slices**, not evidence that the production SaaS is finished.
 
@@ -68,12 +69,27 @@ now freeze the complete E20 and C8 semantics before durable storage:
 - Host resolves the human to `PersonKey` once and persists only the server-resolved opaque actor;
 - invalid evidence and provider-attribution mismatch fail before domain/observation mutation.
 
-The implementation is green with 240 backend and 114 SPA tests. P1-T07 adds the first durable
+The local implementation gates are green with 253 backend and 114 SPA tests. P1-T07 adds the first durable
 implementation behind the unchanged event-store port: migration 0001, forced RLS, a non-owner
 runtime role, transaction-local tenant binding, database-enforced immutability and atomic
 tenant-stream serialization. Apply, verify, guarded rollback, re-apply and hostile integration
-tests pass only against the approved disposable PostgreSQL image. Host composition, WORM anchoring
-and shared, staging or production migration execution remain out of scope.
+tests pass only against the approved disposable PostgreSQL image.
+
+P1-T08 adds Trust-owned PostgreSQL outer adapters behind the unchanged E18/E19 ports. Migration
+0002 provides forced-RLS role assignments, a privileged field-protected person-key perimeter,
+tenant-keyed O(1) lookup, atomic state-plus-E20 evidence, audit-before-release and constant-time
+severance. Its apply, verify, guarded rollback, exact baseline restoration, re-apply and hostile
+suite are green on disposable `postgres:16.14-alpine3.24`. No shared, staging or production
+migration ran; no production key provider, Host composition, cloud resource or WORM anchor was
+introduced.
+
+The Product Owner approved adding only
+`tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs` to P1-T08's scope solely to normalize
+the stale timestamp fixture exposed by Linux CI. The fixture now uses the existing production
+canonicalizer; production validation and application code are unchanged. Fresh local verification
+is green: the targeted regression is 1/1, the backend is 253/253, PostgreSQL is 26/26, the hostile
+class is 12/12, architecture is 15/15 and the SPA is 114/114. All nine PR #28 workflows are green,
+including Release build with zero warnings/errors, Linux backend, gitleaks and protected paths.
 
 ## Microsoft sandbox evidence
 
@@ -90,9 +106,6 @@ Microsoft Agent 365 is not a dependency for the Control Tower. It is one optiona
 ## Production gaps on the critical path
 
 - JIT staff access and production Entra app/onboarding configuration and consent.
-- Durable E18 role assignments and E19 person-key mapping with RLS, transactional audit, field
-  protection and persistence of the already-proven uniqueness, optimistic revocation, O(1)
-  severance and privileged map-read/write contracts.
 - C8 telemetry-policy history, C5 jurisdiction/population resolution and universal privacy Gate 2.
 - Policy-as-of storage refusal at Gate 1; the current development ingestion path must not be used for
   endpoint telemetry until this is complete.
@@ -107,17 +120,20 @@ Microsoft Agent 365 is not a dependency for the Control Tower. It is one optiona
 - Role-complete CIO, CISO, People/Transformation, AI/CoE and Audit experiences.
 - Azure IaC, observability, performance, threat-model, DR, staging and production evidence.
 
-## Next autonomous train
+## Approval boundary
 
-Production identity/privacy foundation:
+P1-T08 is complete and green. The exact one-file exception is approved and verified; all required
+local and PR checks pass, and the final Merge Readiness Report recommends merge.
 
-1. author durable E18/E19 persistence and ephemeral migration 0002 validation (P1-T08);
-2. continue telemetry-policy, jurisdiction, privacy Gate 2 and policy-as-of Gate 1 enforcement;
-3. continue remaining durable PostgreSQL/RLS, transactional outbox and Azure adapter work.
+Implementation cannot start the next train because the repository contains no approved incomplete
+post-P1-T08 task contract. The recorded direction is telemetry-policy, jurisdiction, privacy Gate 2
+and policy-as-of Gate 1, but a bounded approved contract must name its exact first slice.
 
 Endpoint or browser events will not be onboarded before the privacy boundary is real.
 
-## Human gates — no immediate action required
+## Human gates
+
+- Immediate after P1-T08 merge: approve the bounded next task contract; none currently exists.
 
 - Representative Microsoft tenant/licensing and consent when a real-provider validation task reaches
   that point.
@@ -130,16 +146,16 @@ Endpoint or browser events will not be onboarded before the privacy boundary is 
 
 ## Capability maturity
 
-| Capability                  | Current maturity                                 | Production closure                                                                      |
-| --------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| Platform foundation         | Entra auth + durable E20 PostgreSQL kernel green | Persist E18/E19, complete production composition, IaC, observability and DR             |
-| Asset Ledger (C1)           | Domain and in-memory workflow green              | Durable repository, production authorisation and real-source validation                 |
-| Economics (C3)              | Domain and snapshot workflow green               | Currency-safe aggregation, production rate cards/providers and durable projections      |
-| Governance (C2)             | Domain workflow green                            | Durable workflow, authorisation, notifications/control adapters and production policy   |
-| Experience (C7)             | Development SPA/API green                        | Gate 2 everywhere, persona completion, accessibility/e2e and production hosting         |
-| Provider framework (C4)     | Contracts, CSV and sweep pipeline green          | Durable state, production secrets/queue, source adapters and fleet ingestion            |
-| Observation pipeline        | Development path green                           | Policy-as-of storage refusal, typed/minimised payloads and persistent append-only store |
-| Entity resolution           | Deterministic development workflow green         | Full identifier sets, temporal validity, deduplication and real-source rule evidence    |
-| Microsoft providers/PoCs    | Sandbox readiness partially exercised            | Representative data/licensing plus completed provider implementations                   |
-| Endpoint/browser visibility | Approved and planned under DEV-002               | Collector gateway, signed collectors, privacy/security review and managed deployment    |
-| Production readiness        | In progress                                      | All critical-path gaps above plus staging evidence and human production gate            |
+| Capability                  | Current maturity                                              | Production closure                                                                      |
+| --------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Platform foundation         | Entra auth + durable E20/E18/E19 PostgreSQL foundations green | Complete production composition, IaC, observability and DR                              |
+| Asset Ledger (C1)           | Domain and in-memory workflow green                           | Durable repository, production authorisation and real-source validation                 |
+| Economics (C3)              | Domain and snapshot workflow green                            | Currency-safe aggregation, production rate cards/providers and durable projections      |
+| Governance (C2)             | Domain workflow green                                         | Durable workflow, authorisation, notifications/control adapters and production policy   |
+| Experience (C7)             | Development SPA/API green                                     | Gate 2 everywhere, persona completion, accessibility/e2e and production hosting         |
+| Provider framework (C4)     | Contracts, CSV and sweep pipeline green                       | Durable state, production secrets/queue, source adapters and fleet ingestion            |
+| Observation pipeline        | Development path green                                        | Policy-as-of storage refusal, typed/minimised payloads and persistent append-only store |
+| Entity resolution           | Deterministic development workflow green                      | Full identifier sets, temporal validity, deduplication and real-source rule evidence    |
+| Microsoft providers/PoCs    | Sandbox readiness partially exercised                         | Representative data/licensing plus completed provider implementations                   |
+| Endpoint/browser visibility | Approved and planned under DEV-002                            | Collector gateway, signed collectors, privacy/security review and managed deployment    |
+| Production readiness        | In progress                                                   | All critical-path gaps above plus staging evidence and human production gate            |
