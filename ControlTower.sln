@@ -51,6 +51,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ControlTower.Modules.Govern
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ControlTower.Modules.Providers.Tests", "tests\ControlTower.Modules.Providers.Tests\ControlTower.Modules.Providers.Tests.csproj", "{EADE3FF4-1041-48B5-8A2C-C16EBD4DDF59}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ControlTower.Adapters.PostgreSql", "src\Adapters\ControlTower.Adapters.PostgreSql\ControlTower.Adapters.PostgreSql.csproj", "{50E081DA-0C8A-4540-97C6-5938BD760007}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ControlTower.Adapters.PostgreSql.Tests", "tests\ControlTower.Adapters.PostgreSql.Tests\ControlTower.Adapters.PostgreSql.Tests.csproj", "{4AA6AF40-2C22-49D8-82AD-629D92F2DFA9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -136,6 +140,14 @@ Global
 		{EADE3FF4-1041-48B5-8A2C-C16EBD4DDF59}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EADE3FF4-1041-48B5-8A2C-C16EBD4DDF59}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EADE3FF4-1041-48B5-8A2C-C16EBD4DDF59}.Release|Any CPU.Build.0 = Release|Any CPU
+		{50E081DA-0C8A-4540-97C6-5938BD760007}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50E081DA-0C8A-4540-97C6-5938BD760007}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50E081DA-0C8A-4540-97C6-5938BD760007}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50E081DA-0C8A-4540-97C6-5938BD760007}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4AA6AF40-2C22-49D8-82AD-629D92F2DFA9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4AA6AF40-2C22-49D8-82AD-629D92F2DFA9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4AA6AF40-2C22-49D8-82AD-629D92F2DFA9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4AA6AF40-2C22-49D8-82AD-629D92F2DFA9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{B6A32CC9-40CA-4E23-8FE8-EC5408CF6738} = {7C597F4A-0CA3-4C02-B19C-548481984CB9}
@@ -160,5 +172,7 @@ Global
 		{441A8A56-BA36-4FEA-9C06-00A5B90C7493} = {D9F5314B-35BC-44B3-8EAD-803ADF57932E}
 		{085BDF13-EC6F-4428-B2D4-419856A4B094} = {D9F5314B-35BC-44B3-8EAD-803ADF57932E}
 		{EADE3FF4-1041-48B5-8A2C-C16EBD4DDF59} = {D9F5314B-35BC-44B3-8EAD-803ADF57932E}
+		{50E081DA-0C8A-4540-97C6-5938BD760007} = {116A9D64-29DD-4806-9AF3-553B324B6F2E}
+		{4AA6AF40-2C22-49D8-82AD-629D92F2DFA9} = {D9F5314B-35BC-44B3-8EAD-803ADF57932E}
 	EndGlobalSection
 EndGlobal

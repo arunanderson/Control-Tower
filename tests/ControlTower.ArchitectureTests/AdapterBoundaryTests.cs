@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using ControlTower.Adapters.PostgreSql;
 using ControlTower.Platform;
 using NetArchTest.Rules;
 using Xunit;
@@ -43,6 +44,37 @@ public class AdapterBoundaryTests
         {
             var result = Types.InAssembly(asm).Should().NotHaveDependencyOnAny(AdaptersNamespace).GetResult();
             Assert.True(result.IsSuccessful, $"{ns} depends on an adapter: {Join(result.FailingTypeNames)}");
+        }
+    }
+
+    [Fact]
+    public void PostgreSql_adapter_must_not_depend_on_modules()
+    {
+        var result = Types
+            .InAssembly(typeof(PostgreSqlEventStore).Assembly)
+            .Should()
+            .NotHaveDependencyOnAny("ControlTower.Modules")
+            .GetResult();
+        Assert.True(
+            result.IsSuccessful,
+            Join(result.FailingTypeNames));
+    }
+
+    [Fact]
+    public void Npgsql_must_remain_outside_the_kernel_and_modules()
+    {
+        var protectedAssemblies = Modules
+            .Select(item => item.Assembly)
+            .Append(typeof(IModule).Assembly);
+
+        foreach (var assembly in protectedAssemblies)
+        {
+            Assert.DoesNotContain(
+                assembly.GetReferencedAssemblies(),
+                reference => string.Equals(
+                    reference.Name,
+                    "Npgsql",
+                    StringComparison.Ordinal));
         }
     }
 

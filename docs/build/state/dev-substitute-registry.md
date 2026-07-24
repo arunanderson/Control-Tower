@@ -25,7 +25,7 @@ fail if the kernel or any module depends on an adapter.
 | `InMemoryProviderConnectionStore`    | `IProviderConnectionStore`    | Azure Database for PostgreSQL + RLS (credential references only)                         | `AddProviderFramework`, Development only                    | implemented |
 | `InMemoryProviderJobReceiptStore`    | `IProviderJobReceiptStore`    | Azure Service Bus delivery state + PostgreSQL idempotency receipt                        | `AddProviderFramework`, Development only                    | implemented |
 | `InMemoryMergeCaseStore`             | `IMergeCaseStore`             | Azure Database for PostgreSQL (DEC-001)                                                  | `AddLedgerModule`, Development only                         | implemented |
-| Local Docker PostgreSQL              | `IDataStore` (future)         | Azure Database for PostgreSQL Flexible Server (DEC-001)                                  | not yet wired                                               | planned     |
+| Local Docker PostgreSQL              | `IEventStore` integration     | Azure Database for PostgreSQL Flexible Server (DEC-001)                                  | P1-T07 tests/CI, disposable loopback database only          | implemented |
 
 Rules: standard SQL only (DEC-001); no provider SDK in the domain; swappable by configuration; never
 referenced by production IaC/config. In-memory adapters are registered **only** under

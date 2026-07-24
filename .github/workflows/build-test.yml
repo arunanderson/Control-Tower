@@ -6,6 +6,22 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    env:
+      CONTROL_TOWER_POSTGRES_EPHEMERAL: P1-T07-EPHEMERAL-ONLY
+      CONTROL_TOWER_POSTGRES_ADMIN: Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=ct-${{ github.run_id }}-${{ github.run_attempt }};Pooling=true;No Reset On Close=false;Include Error Detail=false
+    services:
+      postgres:
+        image: postgres:16.14-alpine3.24
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_PASSWORD: ct-${{ github.run_id }}-${{ github.run_attempt }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

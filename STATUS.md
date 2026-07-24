@@ -5,8 +5,8 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | Field               | Value                                                                                                        |
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Current phase**   | Phase 1 — production security, privacy and durable-data foundation                                           |
-| **Current task**    | P1-T06 — complete E20 audit metadata and C8 E18/E19 contracts                                                |
-| **Overall state**   | **Complete E20 and C8 semantic contracts are green; durable production foundations remain.**                 |
+| **Current task**    | P1-T07 — persist the E20 event kernel in PostgreSQL                                                          |
+| **Overall state**   | **Migration 0001 and the durable E20 adapter are complete and green in ephemeral PostgreSQL CI.**            |
 | **Product outcome** | One role-appropriate Control Tower for all technically observable AI use across the corporate-managed estate |
 | **Merge policy**    | Merge trains — agent may merge tenant-independent green PRs with a Merge Readiness Report                    |
 | **Last updated**    | 2026-07-24                                                                                                   |
@@ -43,7 +43,8 @@ scope amendment and production delivery plan. PR #22 establishes the trusted Ent
 actor request boundary. PR #23 establishes tenant-scoped C8 role and capability authorization. PR
 #24 connects the SPA to Entra delegated Bearer authentication and server-resolved access. PR #25
 hardens the canonical event envelope and integrity verifier. PR #26 completes the E20 semantic
-record and the C8 E18/E19 identity and authorization contracts.
+record and the C8 E18/E19 identity and authorization contracts. PR #27 persists the E20 kernel in
+PostgreSQL with forced RLS, immutable rows and tenant-serialized atomic append.
 
 These are **implemented development slices**, not evidence that the production SaaS is finished.
 
@@ -67,9 +68,12 @@ now freeze the complete E20 and C8 semantics before durable storage:
 - Host resolves the human to `PersonKey` once and persists only the server-resolved opaque actor;
 - invalid evidence and provider-attribution mismatch fail before domain/observation mutation.
 
-The tenant-independent implementation is locally proven with 224 backend and 114 SPA tests.
-P1-T07/P1-T08 may now persist these frozen contracts; this is not yet a durable E20/E18/E19 or
-production-evidence claim.
+The implementation is green with 240 backend and 114 SPA tests. P1-T07 adds the first durable
+implementation behind the unchanged event-store port: migration 0001, forced RLS, a non-owner
+runtime role, transaction-local tenant binding, database-enforced immutability and atomic
+tenant-stream serialization. Apply, verify, guarded rollback, re-apply and hostile integration
+tests pass only against the approved disposable PostgreSQL image. Host composition, WORM anchoring
+and shared, staging or production migration execution remain out of scope.
 
 ## Microsoft sandbox evidence
 
@@ -107,10 +111,9 @@ Microsoft Agent 365 is not a dependency for the Control Tower. It is one optiona
 
 Production identity/privacy foundation:
 
-1. author the durable PostgreSQL E20 event kernel and ephemeral migration 0001 validation (P1-T07);
-2. author durable E18/E19 persistence and ephemeral migration 0002 validation (P1-T08);
-3. continue telemetry-policy, jurisdiction, privacy Gate 2 and policy-as-of Gate 1 enforcement;
-4. continue remaining durable PostgreSQL/RLS, transactional outbox and Azure adapter work.
+1. author durable E18/E19 persistence and ephemeral migration 0002 validation (P1-T08);
+2. continue telemetry-policy, jurisdiction, privacy Gate 2 and policy-as-of Gate 1 enforcement;
+3. continue remaining durable PostgreSQL/RLS, transactional outbox and Azure adapter work.
 
 Endpoint or browser events will not be onboarded before the privacy boundary is real.
 
@@ -127,16 +130,16 @@ Endpoint or browser events will not be onboarded before the privacy boundary is 
 
 ## Capability maturity
 
-| Capability                  | Current maturity                                      | Production closure                                                                      |
-| --------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Platform foundation         | Entra auth + complete E20/C8 semantic contracts green | Persist E20/E18/E19, RLS, IaC, observability and DR                                     |
-| Asset Ledger (C1)           | Domain and in-memory workflow green                   | Durable repository, production authorisation and real-source validation                 |
-| Economics (C3)              | Domain and snapshot workflow green                    | Currency-safe aggregation, production rate cards/providers and durable projections      |
-| Governance (C2)             | Domain workflow green                                 | Durable workflow, authorisation, notifications/control adapters and production policy   |
-| Experience (C7)             | Development SPA/API green                             | Gate 2 everywhere, persona completion, accessibility/e2e and production hosting         |
-| Provider framework (C4)     | Contracts, CSV and sweep pipeline green               | Durable state, production secrets/queue, source adapters and fleet ingestion            |
-| Observation pipeline        | Development path green                                | Policy-as-of storage refusal, typed/minimised payloads and persistent append-only store |
-| Entity resolution           | Deterministic development workflow green              | Full identifier sets, temporal validity, deduplication and real-source rule evidence    |
-| Microsoft providers/PoCs    | Sandbox readiness partially exercised                 | Representative data/licensing plus completed provider implementations                   |
-| Endpoint/browser visibility | Approved and planned under DEV-002                    | Collector gateway, signed collectors, privacy/security review and managed deployment    |
-| Production readiness        | In progress                                           | All critical-path gaps above plus staging evidence and human production gate            |
+| Capability                  | Current maturity                                 | Production closure                                                                      |
+| --------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Platform foundation         | Entra auth + durable E20 PostgreSQL kernel green | Persist E18/E19, complete production composition, IaC, observability and DR             |
+| Asset Ledger (C1)           | Domain and in-memory workflow green              | Durable repository, production authorisation and real-source validation                 |
+| Economics (C3)              | Domain and snapshot workflow green               | Currency-safe aggregation, production rate cards/providers and durable projections      |
+| Governance (C2)             | Domain workflow green                            | Durable workflow, authorisation, notifications/control adapters and production policy   |
+| Experience (C7)             | Development SPA/API green                        | Gate 2 everywhere, persona completion, accessibility/e2e and production hosting         |
+| Provider framework (C4)     | Contracts, CSV and sweep pipeline green          | Durable state, production secrets/queue, source adapters and fleet ingestion            |
+| Observation pipeline        | Development path green                           | Policy-as-of storage refusal, typed/minimised payloads and persistent append-only store |
+| Entity resolution           | Deterministic development workflow green         | Full identifier sets, temporal validity, deduplication and real-source rule evidence    |
+| Microsoft providers/PoCs    | Sandbox readiness partially exercised            | Representative data/licensing plus completed provider implementations                   |
+| Endpoint/browser visibility | Approved and planned under DEV-002               | Collector gateway, signed collectors, privacy/security review and managed deployment    |
+| Production readiness        | In progress                                      | All critical-path gaps above plus staging evidence and human production gate            |
