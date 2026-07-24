@@ -47,8 +47,10 @@ public sealed class DomainEventContractTests
             (typeof(Modules.Providers.Domain.ObservationIngested), "ObservationIngested", EventPrivilege.Standard),
             (typeof(Modules.Providers.Domain.ProviderCoverageUpdated), "ProviderCoverageUpdated", EventPrivilege.Standard),
             (typeof(Modules.Providers.Domain.ProviderSweepRequested), "ProviderSweepRequested", EventPrivilege.Standard),
+            (typeof(Modules.EnterpriseContext.Privacy.JurisdictionProfileChanged), "JurisdictionProfileChanged", EventPrivilege.Standard),
             (typeof(Modules.Trust.Authorization.PersonKeyMapChanged), "PersonKeyMapChanged", EventPrivilege.Privileged),
             (typeof(Modules.Trust.Authorization.RoleAssignmentChanged), "RoleAssignmentChanged", EventPrivilege.Privileged),
+            (typeof(Modules.Trust.Privacy.TelemetryPolicyChanged), "TelemetryPolicyChanged", EventPrivilege.Privileged),
             (typeof(Modules.Audit.PrivilegedReadRecorded), "PrivilegedReadRecorded", EventPrivilege.Privileged),
             (typeof(Modules.Audit.LegalHoldPlaced), "LegalHoldPlaced", EventPrivilege.Privileged),
             (typeof(Modules.Audit.LegalHoldReleased), "LegalHoldReleased", EventPrivilege.Privileged),
@@ -137,6 +139,7 @@ public sealed class DomainEventContractTests
         {
             typeof(Modules.Trust.Authorization.PersonKeyMapChanged),
             typeof(Modules.Trust.Authorization.RoleAssignmentChanged),
+            typeof(Modules.Trust.Privacy.TelemetryPolicyChanged),
             typeof(Modules.Audit.PrivilegedReadRecorded),
             typeof(Modules.Audit.LegalHoldPlaced),
             typeof(Modules.Audit.LegalHoldReleased),

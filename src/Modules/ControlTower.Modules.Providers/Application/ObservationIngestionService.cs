@@ -2,6 +2,7 @@ using System.Text.Json;
 using ControlTower.Modules.Providers.Domain;
 using ControlTower.Platform.Events;
 using ControlTower.Platform.Identity;
+using ControlTower.Platform.Privacy;
 using ControlTower.Platform.Tenancy;
 
 namespace ControlTower.Modules.Providers.Application;

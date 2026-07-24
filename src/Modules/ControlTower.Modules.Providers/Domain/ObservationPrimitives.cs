@@ -18,19 +18,6 @@ public enum ObservationKind
 }
 
 /// <summary>
-/// Privacy marking set once, at ingestion, and never changed (ADR-014 Gate 1). L1 is the default; higher
-/// levels are applied by policy. Re-masking happens at read (ADR-021) — the marking on the stored
-/// observation is immutable.
-/// </summary>
-public enum PrivacyMarking
-{
-    L1,
-    L2,
-    L3,
-    L4,
-}
-
-/// <summary>
 /// Delta status of an observation relative to the last one seen for the same entity on the same
 /// connection (Stage 5 E2). Unchanged observations are suppressed — not re-appended — so the stream
 /// records only what actually changed.

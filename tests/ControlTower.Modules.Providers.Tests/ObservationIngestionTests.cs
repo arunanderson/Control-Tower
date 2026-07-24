@@ -8,6 +8,7 @@ using ControlTower.Modules.Providers.Application;
 using ControlTower.Modules.Providers.Domain;
 using ControlTower.Modules.Providers.Infrastructure;
 using ControlTower.Platform.Identity;
+using ControlTower.Platform.Privacy;
 using ControlTower.Platform.Tenancy;
 using Xunit;
 
