@@ -280,7 +280,12 @@ merged_prs:
   - { number: 26, title: Complete E20 and C8 E18/E19 contracts }
   - { number: 27, title: Persist the E20 event kernel in PostgreSQL }
   - { number: 28, title: Persist the C8 E18 and E19 foundations in PostgreSQL }
-open_prs: []
+open_prs:
+  - {
+      number: 29,
+      title: "Establish E16 jurisdiction and E17 telemetry-policy foundations",
+      status: green-final-record-rerun-pending,
+    }
 next_trains:
   - "Privacy enforcement: universal C7 read-time Privacy Gate 2 over the shared C5/C8 authorities."
   - "Ingestion enforcement: policy-as-of storage refusal at C4 Gate 1 after Gate 2."
@@ -288,5 +293,5 @@ next_trains:
   - "Enterprise acquisition through C4: Microsoft/Purview/Defender, identity/network/SaaS/cloud/API providers, then tenant-bound browser and endpoint collectors under DEV-002."
   - "P5-T04 retention mechanism remains behind an authoritative versioned Legal-owned jurisdiction-policy provider; production policy values are a human gate."
   - "P0-T16 rerun requires representative agent archetypes and an Agent 365 licence; current sandbox findings are informative but inconclusive."
-test_summary: "P1-T09 local: backend 303/303, PostgreSQL 26/26, C5 14/14, C8 34/34, architecture 17/17 and SPA 114/114 green; Release 0 warnings/0 errors; GitHub PR checks pending."
+test_summary: "P1-T09 local: backend 303/303, PostgreSQL 26/26, C5 14/14, C8 34/34, architecture 17/17 and SPA 114/114 green; Release 0 warnings/0 errors. PR #29: all 9 checks passed on 1522c24; final documentation-only head rerun required before merge."
 last_updated_by: P1-T09

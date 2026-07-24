@@ -6,7 +6,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Current phase**   | Phase 1 — production security, privacy and durable-data foundation                                           |
 | **Current task**    | P1-T09 — establish E16 jurisdiction and E17 telemetry-policy foundations                                     |
-| **Overall state**   | **P1-T09 is locally complete and green; tenant-independent PR checks are pending.**                          |
+| **Overall state**   | **P1-T09 is complete; PR #29 passed 9/9 checks and its final record-only rerun is pending.**                 |
 | **Product outcome** | One role-appropriate Control Tower for all technically observable AI use across the corporate-managed estate |
 | **Merge policy**    | Merge trains — agent may merge tenant-independent green PRs with a Merge Readiness Report                    |
 | **Last updated**    | 2026-07-25                                                                                                   |
@@ -103,7 +103,9 @@ The Product Owner authorized correction of the original P1-T09 contract where it
 frozen blueprint: E16 is Versioned, not Bitemporal; E17 remains Bitemporal. DEV-003 records this
 contract correction without changing the blueprint or ADRs. Fresh local verification is green:
 303/303 backend, 14/14 C5, 34/34 C8, 26/26 disposable PostgreSQL, 17/17 architecture and 114/114
-SPA; Release build has zero warnings and zero errors. GitHub PR workflows remain pending.
+SPA; Release build has zero warnings and zero errors. All nine PR #29 workflows passed against
+implementation/evidence commit `1522c24`; the final documentation-only head must rerun green before
+merge.
 
 ## Microsoft sandbox evidence
 
@@ -137,9 +139,10 @@ Microsoft Agent 365 is not a dependency for the Control Tower. It is one optiona
 
 ## Approval boundary
 
-P1-T09 is complete and green locally. Its corrected contract, implementation, evidence and
-build-control state are aligned with the frozen blueprint. The tenant-independent PR may merge only
-after all required GitHub checks pass and no reviewer finding remains.
+P1-T09 is complete and green. Its corrected contract, implementation, evidence and build-control
+state are aligned with the frozen blueprint. PR #29 is tenant-independent, mergeable, has no
+reviewer finding and passed all nine required workflows on `1522c24`. The final record-only head
+must pass the same workflows before merge.
 
 After merge, the next bounded implementation slice is universal C7 read-time Privacy Gate 2 over
 the shared C5/C8 authorities. Policy-as-of storage refusal at C4 Gate 1 follows Gate 2.
