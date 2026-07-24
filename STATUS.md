@@ -42,7 +42,8 @@ PR #20 recorded the Microsoft sandbox readiness findings. PR #21 records the ent
 scope amendment and production delivery plan. PR #22 establishes the trusted Entra tenant and human
 actor request boundary. PR #23 establishes tenant-scoped C8 role and capability authorization. PR
 #24 connects the SPA to Entra delegated Bearer authentication and server-resolved access. PR #25
-hardens the canonical event envelope and integrity verifier.
+hardens the canonical event envelope and integrity verifier. PR #26 completes the E20 semantic
+record and the C8 E18/E19 identity and authorization contracts.
 
 These are **implemented development slices**, not evidence that the production SaaS is finished.
 

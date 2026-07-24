@@ -242,6 +242,7 @@ merged_prs:
   - { number: 23, title: Tenant-scoped role and capability authorization }
   - { number: 24, title: SPA Entra bearer session and server-resolved access }
   - { number: 25, title: Canonical event envelope and integrity verifier }
+  - { number: 26, title: Complete E20 and C8 E18/E19 contracts }
 open_prs: []
 next_trains:
   - "Production foundation: persist the frozen E20 event kernel (P1-T07), then durable E18/E19 PostgreSQL foundations (P1-T08)."
