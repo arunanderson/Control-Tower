@@ -5,8 +5,8 @@ type: task-contract
 schema_version: 1
 epic: EPIC-1-2
 phase: PHASE-1
-status: approved
-objective: Implement the frozen tenant-scoped E16 JurisdictionProfile and E17 TelemetryPolicy semantics, ports, canonical events and development in-memory adapters needed before either privacy gate can be connected.
+status: in-progress
+objective: Implement the frozen tenant-scoped versioned E16 JurisdictionProfile and bitemporal E17 TelemetryPolicy semantics, ports, canonical events and development in-memory adapters needed before either privacy gate can be connected.
 blueprint_refs:
   - docs/blueprint/stage-04-domain-model.md#27-orgmodel--jurisdictionprofile-c5
   - docs/blueprint/stage-04-domain-model.md#28-tenantconfiguration-c8--including-telemetrypolicy
@@ -68,7 +68,7 @@ preconditions:
   - This slice accepts opaque applicable jurisdiction and population references but does not invent or connect production population-to-jurisdiction source data HR mapping or real taxonomies
   - No production jurisdiction taxonomy policy value legal interpretation works-council decision tenant activation or cloud action is authorised
 required_tests:
-  - E16 revisions are immutable tenant-scoped versioned effective-dated and queryable exactly and as-of without foreign-tenant disclosure
+  - E16 revisions are immutable tenant-scoped versioned event history and queryable exactly by version as current state and as complete history without foreign-tenant disclosure
   - E16 rejects invalid identity time actor regime and version tuples and concurrent stale writes return bounded conflict outcomes
   - E16 resolution uses every applicable jurisdiction and fails closed to L1 when no authoritative ceiling exists
   - E17 revisions preserve valid time and record time history and exact as-of policy selection by both valid-time and recorded-time cutoffs
@@ -103,17 +103,17 @@ acceptance_criteria:
 evidence_required: [docs/build/evidence/EVIDENCE-P1-T09.md]
 rollback: Revert the task commit or PR; this slice changes only code contracts and development in-memory state and creates no persistent or external state.
 requires_human_approval: true
-approved_by: Product Owner explicit automatic-approval instruction on 2026-07-24
-approved_hash: "sha256:e3476cbd14dc7c100f573d405f01c3dafce7a7e7353568caa208a6ea52a42a6a"
+approved_by: Product Owner explicit frozen-blueprint correction approval on 2026-07-25
+approved_hash: "sha256:69a44f7208e30160726f75287f93c8b4915147ef845e703c39791e5b23cc3d05"
 ---
 
 ## Objective
 
-Establish the frozen privacy-policy authority before connecting enforcement. C5 owns effective,
-versioned jurisdiction ceilings. C8 owns effective-dated, bitemporal telemetry policy and validates
-each rule against C5. Both expose tenant-scoped ports, deterministic most-restrictive resolution and
-canonical audit events. Existing C4 code reuses the shared privacy marking without changing its L1
-default.
+Establish the frozen privacy-policy authority before connecting enforcement. C5 owns current,
+versioned jurisdiction ceilings with simple evented history. C8 owns effective-dated, bitemporal
+telemetry policy and validates each rule against C5. Both expose tenant-scoped ports, deterministic
+most-restrictive resolution and canonical audit events. Existing C4 code reuses the shared privacy
+marking without changing its L1 default.
 
 This task adds no privacy gate, persistence, application composition, product surface, policy
 taxonomy or production configuration.
@@ -123,9 +123,10 @@ taxonomy or production configuration.
 1. Promote the existing L1–L4 `PrivacyMarking` into the Platform shared kernel and add only opaque
    cross-context privacy references plus the C5 ceiling-resolution port. Its input remains an
    opaque set of already-applicable jurisdiction and population references.
-2. Implement E16 immutable versioned/effective history, validation, deterministic
-   most-restrictive ceiling resolution, canonical event and tenant-partitioned in-memory store in
-   C5 without introducing a population source or HR mapping.
+2. Implement E16 immutable versioned event history, validation, deterministic current
+   most-restrictive ceiling resolution, canonical event and tenant-partitioned in-memory store in C5
+   without introducing a population source or HR mapping. E16 is not valid-time/record-time
+   bitemporal and exposes no as-of query.
 3. Implement E17 bitemporal policy revisions, per-capability and jurisdiction/population rules,
    frozen activation invariants, E16 ceiling validation, canonical privileged event and
    tenant-partitioned in-memory store in C8.
@@ -137,11 +138,20 @@ taxonomy or production configuration.
 ## Definition of done
 
 C5 and C8 own their frozen E16/E17 semantics without depending on each other or duplicating privacy
-types. Missing or conflicting applicability fails closed; any disabling rule wins before the
-minimum permitted level is selected; policy above the jurisdiction ceiling is rejected; L1 remains
-default; L2+ requires explicit bounded activation evidence; L4 is temporary; history and canonical
-events are exact and tenant-isolated. No Gate 1/2 consumer, population source, persistence,
-production policy or external state is added.
+types. E16 remains simple versioned event history and E17 remains bitemporal. Missing or conflicting
+applicability fails closed; any disabling rule wins before the minimum permitted level is selected;
+policy above the jurisdiction ceiling is rejected; L1 remains default; L2+ requires explicit bounded
+activation evidence; L4 is temporary; history and canonical events are exact and tenant-isolated.
+No Gate 1/2 consumer, population source, persistence, production policy or external state is added.
+
+## Approved frozen-blueprint correction
+
+The Product Owner approved this exact correction on 2026-07-25 after independent review identified
+that the original contract incorrectly gave E16 valid-time plus record-time semantics. Frozen Stage
+4 §8 and the Stage 5 entity catalogue classify E16 as versioned simple evented history and reserve
+bitemporality for E17 and the other explicitly named entities. This correction removes E16
+valid-time/record-time fields and as-of queries, keeps E17 bitemporal, and does not modify the frozen
+blueprint or expand any other part of the task.
 
 ## Rollback
 
