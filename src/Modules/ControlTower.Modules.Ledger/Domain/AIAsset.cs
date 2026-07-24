@@ -1,4 +1,5 @@
 using ControlTower.Platform.Tenancy;
+using ControlTower.Platform.Identity;
 
 namespace ControlTower.Modules.Ledger.Domain;
 
@@ -128,7 +129,7 @@ public sealed class AIAsset
         Raise(new OwnershipReassigned { AssetId = Id, From = from, To = to });
     }
 
-    public ResolutionLink AddResolutionLink(NativeIdentifierSet identifiers, MatchMethod method, MatchConfidence confidence, string linkedBy, Guid? observationRef = null)
+    public ResolutionLink AddResolutionLink(NativeIdentifierSet identifiers, MatchMethod method, MatchConfidence confidence, AuditActor linkedBy, Guid? observationRef = null)
     {
         var link = new ResolutionLink(identifiers, method, confidence, linkedBy, DateTimeOffset.UtcNow, observationRef);
         _links.Add(link);
@@ -142,7 +143,7 @@ public sealed class AIAsset
         _links.Any(l => l.IsActive && l.ObservationRef == observationRef);
 
     /// <summary>Sever a link (it no longer holds). The link is retained with status Severed — never deleted.</summary>
-    public void SeverResolutionLink(Guid linkId, string by, string reason)
+    public void SeverResolutionLink(Guid linkId, AuditActor by, string reason)
     {
         var link = _links.FirstOrDefault(l => l.Id == linkId) ?? throw new DomainException("Resolution link not found.");
         if (!link.IsActive) return;
@@ -152,7 +153,7 @@ public sealed class AIAsset
     }
 
     /// <summary>Mark a link superseded by a new link created on another asset (merge/split). Retained, never deleted.</summary>
-    public void SupersedeResolutionLink(Guid linkId, Guid supersedingLinkId, string by)
+    public void SupersedeResolutionLink(Guid linkId, Guid supersedingLinkId, AuditActor by)
     {
         var link = _links.FirstOrDefault(l => l.Id == linkId) ?? throw new DomainException("Resolution link not found.");
         if (!link.IsActive) return;
@@ -162,7 +163,7 @@ public sealed class AIAsset
     }
 
     /// <summary>This asset was merged into <paramref name="target"/> (its links have been superseded there).</summary>
-    public void MarkMergedInto(LedgerAssetId target, string by)
+    public void MarkMergedInto(LedgerAssetId target, AuditActor by)
     {
         if (RegistrationStatus == RegistrationStatus.Retired)
             throw new DomainException("A retired asset cannot be merged.");
@@ -171,7 +172,7 @@ public sealed class AIAsset
     }
 
     /// <summary>Some of this asset's links were split out into <paramref name="newAsset"/>.</summary>
-    public void RecordSplit(LedgerAssetId newAsset, string by) =>
+    public void RecordSplit(LedgerAssetId newAsset, AuditActor by) =>
         Raise(new AssetSplit { AssetId = Id, NewAssetId = newAsset, By = by });
 
     /// <summary>

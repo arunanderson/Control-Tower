@@ -1,3 +1,5 @@
+using ControlTower.Platform.Identity;
+
 namespace ControlTower.Modules.Ledger.Domain;
 
 /// <summary>
@@ -13,7 +15,7 @@ public sealed class ResolutionLink
         NativeIdentifierSet identifiers,
         MatchMethod method,
         MatchConfidence confidence,
-        string linkedBy,
+        AuditActor linkedBy,
         DateTimeOffset linkedAt,
         Guid? observationRef = null)
     {
@@ -21,6 +23,8 @@ public sealed class ResolutionLink
         Identifiers = identifiers;
         Method = method;
         Confidence = confidence;
+        if (!linkedBy.IsValid)
+            throw new DomainException("A link actor is required.");
         LinkedBy = linkedBy;
         LinkedAt = linkedAt;
         ObservationRef = observationRef;
@@ -35,7 +39,7 @@ public sealed class ResolutionLink
 
     public MatchConfidence Confidence { get; }
 
-    public string LinkedBy { get; }
+    public AuditActor LinkedBy { get; }
 
     public DateTimeOffset LinkedAt { get; }
 

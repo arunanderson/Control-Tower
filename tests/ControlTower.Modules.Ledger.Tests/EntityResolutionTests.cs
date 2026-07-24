@@ -8,6 +8,7 @@ using ControlTower.Adapters.InMemory;
 using ControlTower.Modules.Ledger.Application;
 using ControlTower.Modules.Ledger.Domain;
 using ControlTower.Modules.Ledger.Infrastructure;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 using ProvidersApp = ControlTower.Modules.Providers.Application;
 using ProvidersDomain = ControlTower.Modules.Providers.Domain;
@@ -18,6 +19,9 @@ namespace ControlTower.Modules.Ledger.Tests;
 
 public class EntityResolutionTests
 {
+    private static readonly AuditActor Operator =
+        AuditActor.System("resolution-operator");
+
     private sealed record Rig(
         EntityResolutionService Resolution,
         IAssetRepository Assets,
@@ -107,7 +111,7 @@ public class EntityResolutionTests
         var a = await r.Resolution.ResolveAsync(Obs("X", system: "sys", type: "t"));           // asset A ← X
         var b = await r.Resolution.ResolveAsync(Obs("Y", system: "sys", type: "t"));           // asset B ← Y
         await r.Resolution.ApproveManualLinkAsync(b.AssetId!.Value,
-            NativeIdentifierSet.Of(new NativeIdentifier("sys", "t", "X")), null, "operator");    // B ← X too (collision seed)
+            NativeIdentifierSet.Of(new NativeIdentifier("sys", "t", "X")), null, Operator);    // B ← X too (collision seed)
 
         var result = await r.Resolution.ResolveAsync(Obs("X", system: "sys", type: "t"));       // X now maps to A and B
 
@@ -126,6 +130,22 @@ public class EntityResolutionTests
     {
         public MatchDecision Classify(NativeIdentifier primary, IReadOnlyList<AIAsset> candidates) =>
             new(MatchOutcome.AutoLink, confidence, MatchMethod.Heuristic, target, candidates.Select(c => c.Id).ToList(), "weak");
+    }
+
+    private sealed class ReviewClassifier(string reason) :
+        IMatchClassifier
+    {
+        public MatchDecision Classify(
+            NativeIdentifier primary,
+            IReadOnlyList<AIAsset> candidates) =>
+            new(
+                MatchOutcome.Review,
+                MatchConfidence.Low,
+                MatchMethod.Heuristic,
+                Target: null,
+                candidates.Select(candidate => candidate.Id)
+                    .ToList(),
+                reason);
     }
 
     [Theory]
@@ -157,7 +177,7 @@ public class EntityResolutionTests
         var a = (await r.Resolution.ResolveAsync(Obs("X", system: "sys", type: "t"))).AssetId!.Value;
         var b = (await r.Resolution.ResolveAsync(Obs("Y", system: "sys", type: "t"))).AssetId!.Value;
 
-        await r.Resolution.MergeAsync(a, b, "operator");
+        await r.Resolution.MergeAsync(a, b, Operator);
 
         var target = await r.Assets.GetAsync(a);
         var source = await r.Assets.GetAsync(b);
@@ -178,12 +198,12 @@ public class EntityResolutionTests
         using var _ = r.Accessor.BeginScope(new TenantId(Guid.NewGuid()));
 
         var a = (await r.Resolution.ResolveAsync(Obs("X", system: "sys", type: "t"))).AssetId!.Value;
-        await r.Resolution.ApproveManualLinkAsync(a, NativeIdentifierSet.Of(new NativeIdentifier("sys", "t", "Y")), null, "operator");
+        await r.Resolution.ApproveManualLinkAsync(a, NativeIdentifierSet.Of(new NativeIdentifier("sys", "t", "Y")), null, Operator);
 
         var asset = await r.Assets.GetAsync(a);
         var yLink = asset!.ActiveResolutionLinks.Single(l => l.Identifiers.Identifiers.Any(i => i.Value == "Y"));
 
-        var newId = await r.Resolution.SplitAsync(a, [yLink.Id], "Split Out", "agent", "operator");
+        var newId = await r.Resolution.SplitAsync(a, [yLink.Id], "Split Out", "agent", Operator);
 
         var original = await r.Assets.GetAsync(a);
         var created = await r.Assets.GetAsync(newId);
@@ -193,6 +213,146 @@ public class EntityResolutionTests
 
         var payloads = await EventPayloadsAsync(r);
         Assert.Contains(payloads, p => p.Contains(nameof(AssetSplit)) || p.Contains("NewAssetId"));
+    }
+
+    [Fact]
+    public async Task Invalid_observation_reference_leaves_resolution_state_empty()
+    {
+        var r = Build();
+        using var _ = r.Accessor.BeginScope(
+            new TenantId(Guid.NewGuid()));
+
+        await Assert.ThrowsAsync<DomainException>(
+            () => r.Resolution.ResolveAsync(
+                Obs(
+                    "invalid-observation",
+                    observationId: Guid.Empty)));
+
+        Assert.Empty(await r.Assets.ListAsync());
+        Assert.Empty(
+            await r.MergeCases.OpenCasesAsync());
+        Assert.Empty(await r.Events.ReadAllAsync());
+    }
+
+    [Fact]
+    public async Task Invalid_merge_case_evidence_never_opens_or_resolves_a_case()
+    {
+        var hostile = Build(
+            new ReviewClassifier(
+                new string('x', 2049)));
+        using (hostile.Accessor.BeginScope(
+                   new TenantId(Guid.NewGuid())))
+        {
+            await Assert.ThrowsAsync<DomainException>(
+                () => hostile.Resolution.ResolveAsync(
+                    Obs("hostile-reason")));
+            Assert.Empty(
+                await hostile.MergeCases.OpenCasesAsync());
+            Assert.Empty(
+                await hostile.Events.ReadAllAsync());
+        }
+
+        var r = Build(
+            new ReviewClassifier("manual review"));
+        using var _ = r.Accessor.BeginScope(
+            new TenantId(Guid.NewGuid()));
+        var result = await r.Resolution.ResolveAsync(
+            Obs("review-outcome"));
+        var mergeCaseId = result.MergeCaseId!.Value;
+        var baselineEventCount =
+            (await r.Events.ReadAllAsync()).Count;
+
+        foreach (var invalidOutcome in new[]
+                 {
+                     " padded outcome ",
+                     new string('x', 2049),
+                     "invalid\u0001outcome",
+                     "invalid\uD800outcome",
+                 })
+        {
+            await Assert.ThrowsAsync<DomainException>(
+                () => r.Resolution
+                    .ResolveMergeCaseAsync(
+                        mergeCaseId,
+                        invalidOutcome,
+                        Operator));
+
+            var mergeCase =
+                await r.MergeCases.GetAsync(
+                    mergeCaseId);
+            Assert.NotNull(mergeCase);
+            Assert.Equal(
+                MergeCaseStatus.Open,
+                mergeCase!.Status);
+            Assert.Null(mergeCase.Outcome);
+            Assert.Equal(
+                baselineEventCount,
+                (await r.Events.ReadAllAsync())
+                    .Count);
+        }
+    }
+
+    [Fact]
+    public async Task Invalid_manual_link_and_merge_actor_leave_assets_unchanged()
+    {
+        var r = Build();
+        using var _ = r.Accessor.BeginScope(
+            new TenantId(Guid.NewGuid()));
+        var assetId =
+            (await r.Resolution.ResolveAsync(
+                Obs("manual-link-seed")))
+            .AssetId!.Value;
+        var baselineEventCount =
+            (await r.Events.ReadAllAsync()).Count;
+
+        await Assert.ThrowsAsync<DomainException>(
+            () => r.Resolution
+                .ApproveManualLinkAsync(
+                    assetId,
+                    NativeIdentifierSet.Of(
+                        new NativeIdentifier(
+                            "sys",
+                            "id",
+                            "manual")),
+                    Guid.Empty,
+                    Operator));
+        Assert.Single(
+            (await r.Assets.GetAsync(assetId))!
+            .ActiveResolutionLinks);
+        Assert.Equal(
+            baselineEventCount,
+            (await r.Events.ReadAllAsync()).Count);
+
+        var target = AIAsset.Discover(
+            r.Accessor.Current,
+            "Linkless target",
+            new AssetType("agent"),
+            TaxonomyScheme.Default);
+        var source = AIAsset.Discover(
+            r.Accessor.Current,
+            "Linkless source",
+            new AssetType("agent"),
+            TaxonomyScheme.Default);
+        target.DequeueEvents();
+        source.DequeueEvents();
+        await r.Assets.SaveAsync(target);
+        await r.Assets.SaveAsync(source);
+
+        await Assert.ThrowsAsync<DomainException>(
+            () => r.Resolution.MergeAsync(
+                target.Id,
+                source.Id,
+                default));
+        Assert.Equal(
+            RegistrationStatus.Discovered,
+            (await r.Assets.GetAsync(source.Id))!
+            .RegistrationStatus);
+        Assert.Empty(
+            (await r.Assets.GetAsync(target.Id))!
+            .ActiveResolutionLinks);
+        Assert.Equal(
+            baselineEventCount,
+            (await r.Events.ReadAllAsync()).Count);
     }
 
     [Fact]

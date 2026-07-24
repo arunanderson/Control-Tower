@@ -34,10 +34,12 @@ public sealed class InMemoryEventStore : IEventStore
 
     public ValueTask<StoredEvent> AppendAsync(
         IDomainEvent @event,
+        EventAppendMetadata metadata,
         ReadOnlyMemory<byte> payload,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(@event);
+        ArgumentNullException.ThrowIfNull(metadata);
         ct.ThrowIfCancellationRequested();
 
         var tenant = _tenants.Current;
@@ -65,10 +67,14 @@ public sealed class InMemoryEventStore : IEventStore
                 position,
                 eventId,
                 contract.EventType,
+                metadata.AggregateReference,
+                metadata.Actor,
                 EventEnvelopeCanonicalizer.NormalizeTimestamp(
                     occurredAt),
                 EventEnvelopeCanonicalizer.NormalizeTimestamp(
                     _clock.GetUtcNow()),
+                metadata.Reason,
+                metadata.CorrelationReference,
                 tenant,
                 contract.Privilege,
                 previousHash,

@@ -85,7 +85,7 @@ public sealed class ResolutionWorkbenchReadModel(IAssetRepository assets, IMerge
                 Confidence = l.Confidence.ToString(),
                 Status = l.Status.ToString(),
                 ObservationRef = l.ObservationRef,
-                LinkedBy = l.LinkedBy,
+                LinkedBy = l.LinkedBy.ToString(),
                 LinkedAt = l.LinkedAt,
                 SupersededByLinkId = l.SupersededByLinkId,
             }).ToList(),

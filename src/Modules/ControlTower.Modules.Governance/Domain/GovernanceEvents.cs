@@ -1,4 +1,5 @@
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 
 namespace ControlTower.Modules.Governance.Domain;
 
@@ -24,7 +25,7 @@ public sealed record DecisionRecorded : GovernanceEvent
     public required GovernanceCaseId CaseId { get; init; }
     public required ReviewerRole Role { get; init; }
     public required bool Approved { get; init; }
-    public required string Actor { get; init; }
+    public required AuditActor Actor { get; init; }
     public required string Reason { get; init; }
 }
 
@@ -78,7 +79,7 @@ public sealed record ReuseDecisionRecorded : GovernanceEvent
     public required Guid AssetId { get; init; }
     public required string Action { get; init; }
     public required string Justification { get; init; }
-    public required string Actor { get; init; }
+    public required AuditActor Actor { get; init; }
 }
 
 [DomainEventContract("NotificationIntentRaised", EventPrivilege.Standard)]
@@ -102,6 +103,7 @@ public sealed record NativeControlRequested : GovernanceEvent
 [DomainEventContract("GovernanceDebtRaised", EventPrivilege.Standard)]
 public sealed record GovernanceDebtRaised : GovernanceEvent
 {
+    public required Guid DebtId { get; init; }
     public required Guid AssetId { get; init; }
     public required string DebtType { get; init; }
 }

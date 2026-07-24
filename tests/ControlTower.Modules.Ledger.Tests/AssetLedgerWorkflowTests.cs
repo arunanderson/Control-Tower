@@ -7,6 +7,7 @@ using ControlTower.Modules.Ledger.Application;
 using ControlTower.Modules.Ledger.Domain;
 using ControlTower.Modules.Ledger.Infrastructure;
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 using Xunit;
 
@@ -14,6 +15,9 @@ namespace ControlTower.Modules.Ledger.Tests;
 
 public class AssetLedgerWorkflowTests
 {
+    private static readonly AuditActor Actor =
+        AuditActor.System("ledger-workflow-test");
+
     private static ILedgerAuthorizer AllowAll { get; } =
         new TestAuthorizer(LedgerCapability.TriageAssets, LedgerCapability.RegisterAssets, LedgerCapability.RetireAssets);
 
@@ -35,15 +39,19 @@ public class AssetLedgerWorkflowTests
 
         using (h.Accessor.BeginScope(tenant))
         {
-            var id = await h.Service.DiscoverAsync("Sales Copilot", new AssetType("agent"));
-            await h.Service.TriageAsync(id);
-            await h.Service.RegisterAsync(id, "Drafts sales emails", new PersonRef("obj-1", "Alice"));
+            var id = await h.Service.DiscoverAsync("Sales Copilot", new AssetType("agent"), Actor);
+            await h.Service.TriageAsync(id, Actor);
+            await h.Service.RegisterAsync(
+                id,
+                "Drafts sales emails",
+                new PersonRef(PersonKey.New()),
+                Actor);
 
             var view = await h.ReadModel.GetAsync(id);
             Assert.NotNull(view);
             Assert.Equal("Registered", view!.RegistrationStatus);
             Assert.False(view.IsOwnerless);
-            Assert.Equal("Alice", view.OwnerDisplayName);
+            Assert.Equal("Assigned", view.OwnerDisplayName);
 
             var stream = await h.Events.ReadAllAsync();
             Assert.True(stream.Count >= 4); // discovered, triaged, registered, ownership assigned
@@ -60,9 +68,13 @@ public class AssetLedgerWorkflowTests
         LedgerAssetId id;
         using (h.Accessor.BeginScope(tenantA))
         {
-            id = await h.Service.DiscoverAsync("A-asset", new AssetType("agent"));
-            await h.Service.TriageAsync(id);
-            await h.Service.RegisterAsync(id, "purpose", new PersonRef("o", "Owner"));
+            id = await h.Service.DiscoverAsync("A-asset", new AssetType("agent"), Actor);
+            await h.Service.TriageAsync(id, Actor);
+            await h.Service.RegisterAsync(
+                id,
+                "purpose",
+                new PersonRef(PersonKey.New()),
+                Actor);
         }
 
         using (h.Accessor.BeginScope(tenantB))
@@ -86,15 +98,54 @@ public class AssetLedgerWorkflowTests
 
         using (h.Accessor.BeginScope(tenant))
         {
-            var id = await h.Service.DiscoverAsync("X", new AssetType("agent"));
-            await h.Service.TriageAsync(id);
+            var id = await h.Service.DiscoverAsync("X", new AssetType("agent"), Actor);
+            await h.Service.TriageAsync(id, Actor);
 
             await Assert.ThrowsAsync<UnauthorizedAccessException>(
-                () => h.Service.RegisterAsync(id, "purpose", new PersonRef("o", "Owner")));
+                () => h.Service.RegisterAsync(
+                    id,
+                    "purpose",
+                    new PersonRef(PersonKey.New()),
+                    Actor));
 
             var view = await h.ReadModel.GetAsync(id);
             Assert.Equal("Triaged", view!.RegistrationStatus);
         }
+    }
+
+    [Fact]
+    public async Task Invalid_event_context_is_rejected_before_asset_mutation()
+    {
+        var h = Build(AllowAll);
+        using var _ = h.Accessor.BeginScope(
+            new TenantId(Guid.NewGuid()));
+        var id = await h.Service.DiscoverAsync(
+            "Evidence boundary",
+            new AssetType("agent"),
+            Actor);
+        EventReference? invalidCorrelation =
+            default(EventReference);
+        Assert.True(invalidCorrelation.HasValue);
+        var baselineEventCount =
+            (await h.Events.ReadAllAsync()).Count;
+
+        await Assert.ThrowsAsync<DomainException>(
+            () => h.Service.TriageAsync(
+                id,
+                Actor,
+                invalidCorrelation));
+
+        Assert.Equal(
+            RegistrationStatus.Discovered,
+            (await h.Repository.GetAsync(id))!
+            .RegistrationStatus);
+        Assert.Equal(
+            "Discovered",
+            (await h.ReadModel.GetAsync(id))!
+            .RegistrationStatus);
+        Assert.Equal(
+            baselineEventCount,
+            (await h.Events.ReadAllAsync()).Count);
     }
 
     private sealed record Harness(

@@ -69,5 +69,3 @@ public enum DebtType
     Unregistered,
     StalePurpose,
 }
-
-public sealed record ActorRef(string Id, string DisplayName);

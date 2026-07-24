@@ -1,4 +1,5 @@
 using ControlTower.Platform.Tenancy;
+using ControlTower.Platform.Identity;
 
 namespace ControlTower.Modules.Economics.Domain;
 
@@ -56,7 +57,7 @@ public sealed class ReportingPeriod
     public DateTimeOffset End { get; }
     public ReportingPeriodState State { get; private set; }
     public DateTimeOffset? FrozenAt { get; private set; }
-    public string? FrozenBy { get; private set; }
+    public AuditActor? FrozenBy { get; private set; }
 
     public void BeginClosing()
     {
@@ -64,10 +65,10 @@ public sealed class ReportingPeriod
         State = ReportingPeriodState.Closing;
     }
 
-    public void Freeze(DateTimeOffset frozenAt, string frozenBy)
+    public void Freeze(DateTimeOffset frozenAt, AuditActor frozenBy)
     {
         if (State != ReportingPeriodState.Closing) throw new EconomicsException("Only a closing period can be frozen.");
-        if (string.IsNullOrWhiteSpace(frozenBy)) throw new EconomicsException("A snapshot signer is required.");
+        if (!frozenBy.IsValid) throw new EconomicsException("A snapshot signer is required.");
         State = ReportingPeriodState.Frozen;
         FrozenAt = frozenAt;
         FrozenBy = frozenBy;
@@ -102,7 +103,7 @@ public sealed record ReportSnapshot
     public required ReportInputBasis InputBasis { get; init; }
     public required string InputBasisHash { get; init; }
     public required string PayloadJson { get; init; }
-    public required string SignedBy { get; init; }
+    public required AuditActor SignedBy { get; init; }
     public Guid? SupersedesSnapshotId { get; init; }
     public string? RestatementReason { get; init; }
 }

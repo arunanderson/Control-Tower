@@ -1,4 +1,5 @@
 using ControlTower.Platform.Tenancy;
+using ControlTower.Platform.Identity;
 
 namespace ControlTower.Platform.Events;
 
@@ -15,8 +16,12 @@ public sealed record StoredEvent
         long position,
         Guid eventId,
         string eventType,
+        EventReference aggregateReference,
+        AuditActor actor,
         DateTimeOffset occurredAt,
         DateTimeOffset recordedAt,
+        string? reason,
+        EventReference? correlationReference,
         TenantId tenant,
         EventPrivilege privilege,
         string previousHash,
@@ -27,8 +32,12 @@ public sealed record StoredEvent
         Position = position;
         EventId = eventId;
         EventType = eventType;
+        AggregateReference = aggregateReference;
+        Actor = actor;
         OccurredAt = occurredAt;
         RecordedAt = recordedAt;
+        Reason = reason;
+        CorrelationReference = correlationReference;
         Tenant = tenant;
         Privilege = privilege;
         PreviousHash = previousHash;
@@ -40,8 +49,12 @@ public sealed record StoredEvent
     public long Position { get; init; }
     public Guid EventId { get; init; }
     public string EventType { get; init; }
+    public EventReference AggregateReference { get; init; }
+    public AuditActor Actor { get; init; }
     public DateTimeOffset OccurredAt { get; init; }
     public DateTimeOffset RecordedAt { get; init; }
+    public string? Reason { get; init; }
+    public EventReference? CorrelationReference { get; init; }
     public TenantId Tenant { get; init; }
     public EventPrivilege Privilege { get; init; }
     public string PreviousHash { get; init; }

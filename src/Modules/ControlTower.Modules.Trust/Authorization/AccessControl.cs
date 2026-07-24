@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using ControlTower.Platform.Identity;
 
 namespace ControlTower.Modules.Trust.Authorization;
 
@@ -43,15 +44,26 @@ public enum OrganizationScope
 public sealed class EffectiveAccess
 {
     internal EffectiveAccess(
+        PersonKey? subjectPersonKey,
         OrganizationScope organizationScope,
         IReadOnlyList<ControlTowerRole> roles,
         IReadOnlySet<ControlTowerCapability> capabilities)
     {
+        if (subjectPersonKey is { } personKey
+            && !personKey.IsValid)
+        {
+            throw new ArgumentException(
+                "The effective-access PersonKey is invalid.",
+                nameof(subjectPersonKey));
+        }
+
+        SubjectPersonKey = subjectPersonKey;
         OrganizationScope = organizationScope;
         Roles = roles;
         Capabilities = capabilities;
     }
 
+    public PersonKey? SubjectPersonKey { get; }
     public OrganizationScope OrganizationScope { get; }
     public IReadOnlyList<ControlTowerRole> Roles { get; }
     public IReadOnlySet<ControlTowerCapability> Capabilities { get; }
@@ -102,6 +114,11 @@ public static class ControlTowerAccessCatalog
         }.ToFrozenDictionary();
 
     public static EffectiveAccess Resolve(IEnumerable<ControlTowerRole> assignedRoles)
+        => Resolve(null, assignedRoles);
+
+    public static EffectiveAccess Resolve(
+        PersonKey? subjectPersonKey,
+        IEnumerable<ControlTowerRole> assignedRoles)
     {
         var roles = assignedRoles
             .Where(Enum.IsDefined)
@@ -112,6 +129,7 @@ public static class ControlTowerAccessCatalog
             .SelectMany(role => Bundles[role])
             .ToFrozenSet();
         return new(
+            subjectPersonKey,
             OrganizationScope.TenantWide,
             Array.AsReadOnly(roles),
             capabilities);

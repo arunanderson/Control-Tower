@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using ControlTower.Host.Web.Authentication;
 using ControlTower.Modules.Trust.Authorization;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
@@ -123,7 +124,7 @@ public sealed class LocalJwtWebFactory : WebApplicationFactory<Program>
         using var _ = tenants.BeginScope(new TenantId(internalTenantId));
         var service =
             scope.ServiceProvider.GetRequiredService<RoleAssignmentService>();
-        var changedBy = RoleAssignmentActor.System("test-fixture");
+        var changedBy = AuditActor.System("test-fixture");
         foreach (var role in roles)
         {
             service.AssignAsync(objectId, role, changedBy)

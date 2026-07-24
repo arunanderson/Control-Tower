@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ControlTower.Modules.Providers.Domain;
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 
 namespace ControlTower.Modules.Providers.Application;
@@ -33,13 +34,44 @@ public sealed class ObservationIngestionService(
         ProviderCapability capability,
         CancellationToken ct = default)
     {
-        // Contract validation gates admission — the same check for every provider (ADR-007).
-        var validation = ProviderContractValidator.ValidateProvider(provider);
-        if (!validation.IsValid)
-            throw new ProviderException($"Provider '{provider.Manifest.SurfaceId}' failed contract validation: {string.Join("; ", validation.Errors)}");
+        var manifest = provider.Manifest
+            ?? throw new ProviderException(
+                "The provider has no manifest.");
 
-        if (!provider.Supports(capability))
-            throw new ProviderException($"Provider '{provider.Manifest.SurfaceId}' does not declare capability {capability}.");
+        // Contract validation gates admission — the same check for every provider (ADR-007).
+        var validation =
+            ProviderContractValidator.ValidateManifest(
+                manifest);
+        if (!validation.IsValid)
+            throw new ProviderException($"Provider '{manifest.SurfaceId}' failed contract validation: {string.Join("; ", validation.Errors)}");
+
+        if (!manifest.Capabilities.Contains(capability))
+            throw new ProviderException($"Provider '{manifest.SurfaceId}' does not declare capability {capability}.");
+
+        AuditActor providerActor;
+        try
+        {
+            providerActor = AuditActor.Provider(
+                manifest.SurfaceId);
+        }
+        catch (ArgumentException)
+        {
+            throw new ProviderException(
+                $"Provider '{manifest.SurfaceId}' has an invalid audit identity.");
+        }
+        EventReference connectionReference;
+        try
+        {
+            connectionReference =
+                new EventReference(
+                    "provider-connection",
+                    context.ConnectionId);
+        }
+        catch (ArgumentException)
+        {
+            throw new ProviderException(
+                "The provider connection has an invalid evidence identity.");
+        }
 
         var tenant = tenants.Current; // throws outside a tenant scope (ADR-021)
         var startedAt = DateTimeOffset.UtcNow;
@@ -55,6 +87,15 @@ public sealed class ObservationIngestionService(
         {
             await foreach (var raw in provider.AcquireAsync(context, capability, ct))
             {
+                if (!string.Equals(
+                        raw.SurfaceId,
+                        manifest.SurfaceId,
+                        StringComparison.Ordinal))
+                {
+                    throw new ProviderException(
+                        "A provider observation must use its manifest surface identity.");
+                }
+
                 observed++;
 
                 var deltaKey = ObservationNormalization.DeltaKeyFor(context.ConnectionId, raw);
@@ -117,7 +158,17 @@ public sealed class ObservationIngestionService(
                     ObservedAt = observation.ObservedAt,
                     DisplayName = displayName,
                     AssetType = assetType,
-                }, ct);
+                },
+                    new EventAppendMetadata(
+                        EventReference.For(
+                            "provider-observation",
+                            observation.ObservationId),
+                        providerActor,
+                        reason: null,
+                        EventReference.For(
+                            "ingestion-run",
+                            runId)),
+                    ct);
 
                 if (delta == DeltaStatus.New) added++; else changed++;
                 if (raw.ObservedAt > highWater) highWater = raw.ObservedAt;
@@ -143,7 +194,7 @@ public sealed class ObservationIngestionService(
                 RunId = runId,
                 Tenant = tenant,
                 ConnectionRef = context.ConnectionId,
-                SurfaceId = provider.Manifest.SurfaceId,
+                SurfaceId = manifest.SurfaceId,
                 Capability = capability,
                 StartedAt = startedAt,
                 CompletedAt = endedAt,
@@ -159,26 +210,50 @@ public sealed class ObservationIngestionService(
                 RunId = runId,
                 Tenant = tenant.ToString(),
                 ConnectionRef = context.ConnectionId,
-                SurfaceId = provider.Manifest.SurfaceId,
+                SurfaceId = manifest.SurfaceId,
                 Capability = capability.ToString(),
                 Outcome = outcome,
                 CompletedAt = endedAt,
-                FreshnessExpectationSeconds = provider.Manifest.FreshnessExpectation.TotalSeconds,
+                FreshnessExpectationSeconds = manifest.FreshnessExpectation.TotalSeconds,
                 Observed = observed,
                 New = added,
                 Changed = changed,
                 Suppressed = suppressed,
-            }, ProviderCoverageUpdatedTopic, token);
+            },
+                ProviderCoverageUpdatedTopic,
+                new EventAppendMetadata(
+                    EventReference.For(
+                        "ingestion-run",
+                        runId),
+                    providerActor,
+                    reason: null,
+                    connectionReference),
+                token);
         }
     }
 
-    private async Task EmitAsync(ObservationIngested @event, CancellationToken ct)
-        => await EmitAsync(@event, ObservationIngestedTopic, ct);
+    private async Task EmitAsync(
+        ObservationIngested @event,
+        EventAppendMetadata metadata,
+        CancellationToken ct)
+        => await EmitAsync(
+            @event,
+            ObservationIngestedTopic,
+            metadata,
+            ct);
 
-    private async Task EmitAsync(ProviderEvent @event, string topic, CancellationToken ct)
+    private async Task EmitAsync(
+        ProviderEvent @event,
+        string topic,
+        EventAppendMetadata metadata,
+        CancellationToken ct)
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(@event, @event.GetType());
-        await events.AppendAsync(@event, payload, ct); // audit trail (ADR-015)
+        await events.AppendAsync(
+            @event,
+            metadata,
+            payload,
+            ct); // audit trail (ADR-015)
         await outbox.EnqueueAsync(topic, payload, ct); // reliable host-composed hand-off (Stage 9 §2.3)
     }
 }

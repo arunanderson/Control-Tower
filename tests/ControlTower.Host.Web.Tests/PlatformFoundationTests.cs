@@ -46,7 +46,7 @@ public class PlatformFoundationTests(LocalJwtWebFactory factory)
     }
 
     [Fact]
-    public async Task Signed_identity_maps_to_the_internal_tenant_and_canonical_actor()
+    public async Task Signed_identity_maps_to_the_internal_tenant_and_opaque_actor()
     {
         var directoryTenantId = Guid.NewGuid();
         var internalTenantId = Guid.NewGuid();
@@ -61,10 +61,12 @@ public class PlatformFoundationTests(LocalJwtWebFactory factory)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<WhoAmI>();
         Assert.Equal(internalTenantId.ToString(), body!.Tenant);
-        Assert.Equal(directoryTenantId, body.DirectoryTenant);
-        Assert.Equal(
-            $"entra:{directoryTenantId:D}:{objectId:D}",
-            body.Actor);
+        AssertOpaqueHumanActor(body.Actor, directoryTenantId, objectId);
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(
+            "directoryTenant",
+            json,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -82,11 +84,34 @@ public class PlatformFoundationTests(LocalJwtWebFactory factory)
         var body = await client.GetFromJsonAsync<WhoAmI>("/whoami");
 
         Assert.Equal(internalTenantId.ToString(), body!.Tenant);
-        Assert.Equal(directoryTenantId, body.DirectoryTenant);
+        AssertOpaqueHumanActor(
+            body.Actor,
+            directoryTenantId,
+            Guid.Empty);
+    }
+
+    private static void AssertOpaqueHumanActor(
+        string? actor,
+        Guid directoryTenantId,
+        Guid objectId)
+    {
+        Assert.NotNull(actor);
+        Assert.StartsWith("person:", actor, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            directoryTenantId.ToString("D"),
+            actor,
+            StringComparison.OrdinalIgnoreCase);
+        if (objectId != Guid.Empty)
+        {
+            Assert.DoesNotContain(
+                objectId.ToString("D"),
+                actor,
+                StringComparison.OrdinalIgnoreCase);
+        }
+        Assert.True(Guid.TryParseExact(actor["person:".Length..], "D", out _));
     }
 
     private sealed record WhoAmI(
         string Tenant,
-        Guid DirectoryTenant,
-        string Actor);
+        string? Actor);
 }

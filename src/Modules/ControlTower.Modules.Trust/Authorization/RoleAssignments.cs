@@ -1,4 +1,6 @@
+using ControlTower.Platform.Audit;
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 
 namespace ControlTower.Modules.Trust.Authorization;
@@ -13,7 +15,7 @@ public sealed class RoleAssignment
         TenantId tenant,
         PersonKey subjectPersonKey,
         ControlTowerRole role,
-        RoleAssignmentActor assignedBy,
+        AuditActor assignedBy,
         DateTimeOffset assignedAt)
         : this(
             id,
@@ -22,8 +24,9 @@ public sealed class RoleAssignment
             role,
             assignedBy,
             assignedAt,
-            null,
-            null)
+            version: 1,
+            revokedAt: null,
+            revokedBy: null)
     {
     }
 
@@ -32,21 +35,22 @@ public sealed class RoleAssignment
         TenantId tenant,
         PersonKey subjectPersonKey,
         ControlTowerRole role,
-        RoleAssignmentActor assignedBy,
+        AuditActor assignedBy,
         DateTimeOffset assignedAt,
+        long version,
         DateTimeOffset? revokedAt,
-        RoleAssignmentActor? revokedBy)
+        AuditActor? revokedBy)
     {
-        if (id == Guid.Empty)
-            throw new RoleAssignmentException("A role-assignment ID is required.");
-        if (!subjectPersonKey.IsValid)
-            throw new RoleAssignmentException("A non-empty subject person key is required.");
-        if (!Enum.IsDefined(role))
-            throw new RoleAssignmentException("The role is not a curated Control Tower role.");
-        if (!assignedBy.IsValid)
-            throw new RoleAssignmentException("A bounded assigning actor is required.");
-        if (revokedBy is not null && !revokedBy.Value.IsValid)
-            throw new RoleAssignmentException("A bounded revoking actor is required.");
+        Validate(
+            id,
+            tenant,
+            subjectPersonKey,
+            role,
+            assignedBy,
+            assignedAt,
+            version,
+            revokedAt,
+            revokedBy);
 
         Id = id;
         Tenant = tenant;
@@ -54,29 +58,64 @@ public sealed class RoleAssignment
         Role = role;
         AssignedBy = assignedBy;
         AssignedAt = assignedAt;
+        Version = version;
         RevokedAt = revokedAt;
         RevokedBy = revokedBy;
     }
 
     public Guid Id { get; }
+
     public TenantId Tenant { get; }
+
     public PersonKey SubjectPersonKey { get; }
+
     public ControlTowerRole Role { get; }
-    public OrganizationScope OrganizationScope => OrganizationScope.TenantWide;
-    public RoleAssignmentActor AssignedBy { get; }
+
+    public OrganizationScope OrganizationScope =>
+        OrganizationScope.TenantWide;
+
+    public AuditActor AssignedBy { get; }
+
     public DateTimeOffset AssignedAt { get; }
+
+    public long Version { get; }
+
     public DateTimeOffset? RevokedAt { get; }
-    public RoleAssignmentActor? RevokedBy { get; }
+
+    public AuditActor? RevokedBy { get; }
+
     public bool IsActive => RevokedAt is null;
 
+    public static RoleAssignment Rehydrate(
+        Guid id,
+        TenantId tenant,
+        PersonKey subjectPersonKey,
+        ControlTowerRole role,
+        AuditActor assignedBy,
+        DateTimeOffset assignedAt,
+        long version,
+        DateTimeOffset? revokedAt,
+        AuditActor? revokedBy) =>
+        new(
+            id,
+            tenant,
+            subjectPersonKey,
+            role,
+            assignedBy,
+            assignedAt,
+            version,
+            revokedAt,
+            revokedBy);
+
     internal RoleAssignment Revoke(
-        RoleAssignmentActor revokedBy,
+        AuditActor revokedBy,
         DateTimeOffset revokedAt)
     {
         if (!IsActive)
-            throw new RoleAssignmentException("The role assignment is already revoked.");
-        if (!revokedBy.IsValid)
-            throw new RoleAssignmentException("A bounded revoking actor is required.");
+        {
+            throw new RoleAssignmentException(
+                "The role assignment is already revoked.");
+        }
 
         return new(
             Id,
@@ -85,8 +124,74 @@ public sealed class RoleAssignment
             Role,
             AssignedBy,
             AssignedAt,
+            checked(Version + 1),
             revokedAt,
             revokedBy);
+    }
+
+    private static void Validate(
+        Guid id,
+        TenantId tenant,
+        PersonKey subjectPersonKey,
+        ControlTowerRole role,
+        AuditActor assignedBy,
+        DateTimeOffset assignedAt,
+        long version,
+        DateTimeOffset? revokedAt,
+        AuditActor? revokedBy)
+    {
+        if (id == Guid.Empty)
+        {
+            throw new RoleAssignmentException(
+                "A role-assignment ID is required.");
+        }
+        if (tenant.Value == Guid.Empty)
+        {
+            throw new RoleAssignmentException(
+                "A role-assignment tenant is required.");
+        }
+        if (!subjectPersonKey.IsValid)
+        {
+            throw new RoleAssignmentException(
+                "A non-empty subject PersonKey is required.");
+        }
+        if (!Enum.IsDefined(role))
+        {
+            throw new RoleAssignmentException(
+                "The role is not a curated Control Tower role.");
+        }
+        if (!assignedBy.IsValid)
+        {
+            throw new RoleAssignmentException(
+                "A bounded assigning actor is required.");
+        }
+        if (assignedAt == default)
+        {
+            throw new RoleAssignmentException(
+                "An assignment time is required.");
+        }
+        if (revokedAt is null != (revokedBy is null))
+        {
+            throw new RoleAssignmentException(
+                "Revocation time and actor must be supplied together.");
+        }
+        if (revokedBy is { } actor && !actor.IsValid)
+        {
+            throw new RoleAssignmentException(
+                "A bounded revoking actor is required.");
+        }
+        if (revokedAt is { } at && at < assignedAt)
+        {
+            throw new RoleAssignmentException(
+                "A revocation cannot precede assignment.");
+        }
+
+        var expectedVersion = revokedAt is null ? 1L : 2L;
+        if (version != expectedVersion)
+        {
+            throw new RoleAssignmentException(
+                "The role-assignment version is invalid for its state.");
+        }
     }
 }
 
@@ -94,13 +199,23 @@ public sealed class RoleAssignment
 public sealed record RoleAssignmentChanged : IDomainEvent
 {
     public Guid EventId { get; init; } = Guid.NewGuid();
-    public DateTimeOffset OccurredAt { get; init; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset OccurredAt { get; init; } =
+        DateTimeOffset.UtcNow;
+
     public required Guid AssignmentId { get; init; }
-    public required Guid SubjectPersonKey { get; init; }
+
+    public required PersonKey SubjectPersonKey { get; init; }
+
     public required string Role { get; init; }
+
     public required string OrganizationScope { get; init; }
+
     public required string Change { get; init; }
-    public required string ChangedBy { get; init; }
+
+    public required AuditActor ChangedBy { get; init; }
+
+    public required long Version { get; init; }
 }
 
 public interface IRoleAssignmentReader
@@ -110,19 +225,33 @@ public interface IRoleAssignmentReader
         CancellationToken ct = default);
 }
 
+public enum RoleAssignmentCommitStatus
+{
+    Applied,
+    AlreadyActive,
+    Conflict,
+}
+
+public sealed record RoleAssignmentCommitResult(
+    RoleAssignmentCommitStatus Status,
+    RoleAssignment? Authoritative);
+
 public interface IRoleAssignmentStore : IRoleAssignmentReader
 {
-    Task<RoleAssignment?> GetAsync(Guid assignmentId, CancellationToken ct = default);
+    Task<RoleAssignment?> GetAsync(
+        Guid assignmentId,
+        CancellationToken ct = default);
 
     /// <summary>
-    /// Atomically persists the E18 state and its canonical audit event. The durable adapter must use
-    /// one database transaction; an assignment may never exist without the matching event. It must
-    /// also enforce one active assignment per tenant/person/role and use optimistic concurrency for
-    /// revocation so concurrent commands cannot leave duplicate grants or audit events.
+    /// Atomically persists E18 state and its canonical audit event. Expected version zero creates an
+    /// assignment; a positive value applies a state transition. The durable adapter owns one database
+    /// transaction and the same typed outcomes.
     /// </summary>
-    Task CommitAsync(
+    Task<RoleAssignmentCommitResult> CommitAsync(
         RoleAssignment assignment,
         RoleAssignmentChanged changed,
+        EventAppendMetadata metadata,
+        long expectedVersion,
         CancellationToken ct = default);
 }
 
@@ -139,6 +268,7 @@ public interface IEffectiveAccessResolver
 {
     Task<EffectiveAccess> ResolveAsync(
         Guid subjectObjectId,
+        PersonKeyAccessContext access,
         CancellationToken ct = default);
 }
 
@@ -150,23 +280,33 @@ public sealed class EffectiveAccessResolver(
 {
     public async Task<EffectiveAccess> ResolveAsync(
         Guid subjectObjectId,
+        PersonKeyAccessContext access,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(access);
         if (subjectObjectId == Guid.Empty)
-            return ControlTowerAccessCatalog.Resolve([]);
+            return ControlTowerAccessCatalog.Resolve(null, []);
 
-        var subjectPersonKey = await personKeys.FindAsync(subjectObjectId, ct);
-        if (subjectPersonKey is null || !subjectPersonKey.Value.IsValid)
-            return ControlTowerAccessCatalog.Resolve([]);
+        var subjectPersonKey = await personKeys.FindAsync(
+            subjectObjectId,
+            access,
+            ct);
+        if (subjectPersonKey is null
+            || !subjectPersonKey.Value.IsValid)
+        {
+            return ControlTowerAccessCatalog.Resolve(null, []);
+        }
 
         var tenant = tenants.Current;
         var active = await assignments.ListForSubjectAsync(
             subjectPersonKey.Value,
             ct);
         return ControlTowerAccessCatalog.Resolve(
+            subjectPersonKey.Value,
             active.Where(assignment =>
                     assignment.Tenant == tenant
-                    && assignment.SubjectPersonKey == subjectPersonKey.Value
+                    && assignment.SubjectPersonKey
+                    == subjectPersonKey.Value
                     && assignment.IsActive)
                 .Select(assignment => assignment.Role));
     }
@@ -176,92 +316,179 @@ public sealed class EffectiveAccessResolver(
 public sealed class RoleAssignmentService(
     IPersonKeyMap personKeys,
     IRoleAssignmentStore store,
-    ITenantContextAccessor tenants)
+    ITenantContextAccessor tenants,
+    TimeProvider clock)
 {
     public async Task<Guid> AssignAsync(
         Guid subjectObjectId,
         ControlTowerRole role,
-        RoleAssignmentActor changedBy,
+        AuditActor changedBy,
         CancellationToken ct = default)
     {
         if (subjectObjectId == Guid.Empty)
-            throw new RoleAssignmentException("A non-empty subject oid is required.");
-        if (!Enum.IsDefined(role))
-            throw new RoleAssignmentException("The role is not a curated Control Tower role.");
-        if (!changedBy.IsValid)
-            throw new RoleAssignmentException("A bounded assigning actor is required.");
-
-        var tenant = tenants.Current;
-        var subjectPersonKey = await personKeys.GetOrCreateAsync(
-            subjectObjectId,
-            ct);
-        if (!subjectPersonKey.IsValid)
         {
             throw new RoleAssignmentException(
-                "The person-key map returned an invalid subject.");
+                "A non-empty subject oid is required.");
         }
-        var existing = (await store.ListForSubjectAsync(subjectPersonKey, ct))
-            .SingleOrDefault(assignment =>
-                assignment.Tenant == tenant
-                && assignment.SubjectPersonKey == subjectPersonKey
-                && assignment.IsActive
-                && assignment.Role == role);
-        if (existing is not null)
-            return existing.Id;
+        if (!Enum.IsDefined(role))
+        {
+            throw new RoleAssignmentException(
+                "The role is not a curated Control Tower role.");
+        }
+        if (!changedBy.IsValid)
+        {
+            throw new RoleAssignmentException(
+                "A bounded assigning actor is required.");
+        }
+
+        var correlation = EventReference.For(
+            "role-assignment-command",
+            Guid.NewGuid());
+        var personResult = await personKeys.GetOrCreateAsync(
+            new DirectoryIdentitySnapshot(subjectObjectId),
+            new PersonKeyAccessContext(
+                changedBy,
+                "assign role",
+                correlation,
+                PrivilegedReadPolicy.NotApplicable()),
+            ct);
+        if (!personResult.PersonKey.IsValid)
+        {
+            throw new RoleAssignmentException(
+                "The PersonKey map returned an invalid subject.");
+        }
 
         var now = EventEnvelopeCanonicalizer.NormalizeTimestamp(
-            DateTimeOffset.UtcNow);
+            clock.GetUtcNow());
         var assignment = new RoleAssignment(
             Guid.NewGuid(),
-            tenant,
-            subjectPersonKey,
+            tenants.Current,
+            personResult.PersonKey,
             role,
             changedBy,
             now);
-        await store.CommitAsync(
+        var changed = Changed(
             assignment,
-            Changed(assignment, "Assigned", changedBy, now),
+            "Assigned",
+            changedBy,
+            now);
+        var result = await store.CommitAsync(
+            assignment,
+            changed,
+            Metadata(assignment, changedBy, correlation),
+            expectedVersion: 0,
             ct);
-        return assignment.Id;
+
+        if (result.Status
+                is RoleAssignmentCommitStatus.Applied
+                or RoleAssignmentCommitStatus.AlreadyActive
+            && IsAuthoritativeActive(
+                result.Authoritative,
+                tenants.Current,
+                personResult.PersonKey,
+                role))
+        {
+            return result.Authoritative!.Id;
+        }
+
+        throw new RoleAssignmentException(
+            "The role assignment conflicted with a concurrent change.");
     }
 
     public async Task RevokeAsync(
         Guid assignmentId,
-        RoleAssignmentActor changedBy,
+        AuditActor changedBy,
         CancellationToken ct = default)
     {
+        if (!changedBy.IsValid)
+        {
+            throw new RoleAssignmentException(
+                "A bounded revoking actor is required.");
+        }
+
         var assignment = await store.GetAsync(assignmentId, ct)
             ?? throw NotFound();
         if (assignment.Id != assignmentId
             || assignment.Tenant != tenants.Current)
+        {
             throw NotFound();
+        }
+        if (!assignment.IsActive)
+            return;
 
         var now = EventEnvelopeCanonicalizer.NormalizeTimestamp(
-            DateTimeOffset.UtcNow);
+            clock.GetUtcNow());
         var revoked = assignment.Revoke(changedBy, now);
-        await store.CommitAsync(
+        var correlation = EventReference.For(
+            "role-assignment-command",
+            Guid.NewGuid());
+        var changed = Changed(
             revoked,
-            Changed(revoked, "Revoked", changedBy, now),
+            "Revoked",
+            changedBy,
+            now);
+        var result = await store.CommitAsync(
+            revoked,
+            changed,
+            Metadata(revoked, changedBy, correlation),
+            assignment.Version,
             ct);
+
+        if (result.Status == RoleAssignmentCommitStatus.Applied)
+            return;
+        if (result.Authoritative is { } authoritative
+            && authoritative.Id == assignmentId
+            && authoritative.Tenant == tenants.Current
+            && !authoritative.IsActive)
+        {
+            return;
+        }
+
+        throw new RoleAssignmentException(
+            "The role assignment conflicted with a concurrent change.");
     }
 
     private static RoleAssignmentChanged Changed(
         RoleAssignment assignment,
         string change,
-        RoleAssignmentActor changedBy,
-        DateTimeOffset occurredAt)
-    {
-        return new RoleAssignmentChanged
+        AuditActor changedBy,
+        DateTimeOffset occurredAt) =>
+        new()
         {
             AssignmentId = assignment.Id,
-            SubjectPersonKey = assignment.SubjectPersonKey.Value,
-            Role = ControlTowerAccessCatalog.Name(assignment.Role),
-            OrganizationScope = assignment.OrganizationScope.ToString(),
+            SubjectPersonKey = assignment.SubjectPersonKey,
+            Role = ControlTowerAccessCatalog.Name(
+                assignment.Role),
+            OrganizationScope =
+                assignment.OrganizationScope.ToString(),
             Change = change,
-            ChangedBy = changedBy.ToString(),
+            ChangedBy = changedBy,
+            Version = assignment.Version,
             OccurredAt = occurredAt,
         };
-    }
+
+    private static EventAppendMetadata Metadata(
+        RoleAssignment assignment,
+        AuditActor actor,
+        EventReference correlation) =>
+        new(
+            EventReference.For(
+                "role-assignment",
+                assignment.Id),
+            actor,
+            reason: null,
+            correlation);
+
+    private static bool IsAuthoritativeActive(
+        RoleAssignment? assignment,
+        TenantId tenant,
+        PersonKey subject,
+        ControlTowerRole role) =>
+        assignment is not null
+        && assignment.Tenant == tenant
+        && assignment.SubjectPersonKey == subject
+        && assignment.Role == role
+        && assignment.IsActive;
 
     private static RoleAssignmentException NotFound() =>
         new("Role assignment not found in this tenant.");

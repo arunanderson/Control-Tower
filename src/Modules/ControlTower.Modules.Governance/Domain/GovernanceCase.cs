@@ -1,9 +1,10 @@
 using ControlTower.Platform.Tenancy;
+using ControlTower.Platform.Identity;
 
 namespace ControlTower.Modules.Governance.Domain;
 
 /// <summary>An approval decision — actor, reason, evidence, timestamp and outcome are always preserved.</summary>
-public sealed record ApprovalDecision(ReviewerRole Role, ActorRef Actor, bool Approved, string Reason, string? EvidenceRef, DateTimeOffset At);
+public sealed record ApprovalDecision(ReviewerRole Role, AuditActor Actor, bool Approved, string Reason, string? EvidenceRef, DateTimeOffset At);
 
 /// <summary>
 /// C2 GovernanceCase (Stage 4 §10 socket): a typed case that records governance decisions and
@@ -67,7 +68,7 @@ public sealed class GovernanceCase
         return c;
     }
 
-    public void RecordDecision(ReviewerRole role, ActorRef actor, bool approved, string reason, string? evidenceRef, DateTimeOffset at)
+    public void RecordDecision(ReviewerRole role, AuditActor actor, bool approved, string reason, string? evidenceRef, DateTimeOffset at)
     {
         if (Status is not (CaseStatus.Open or CaseStatus.AwaitingReview))
             throw new GovernanceException($"Cannot record a decision on a {Status} case.");
@@ -76,7 +77,7 @@ public sealed class GovernanceCase
         Require(actor, reason);
 
         _decisions.Add(new ApprovalDecision(role, actor, approved, reason, evidenceRef, at));
-        Raise(new DecisionRecorded { CaseId = Id, Role = role, Approved = approved, Actor = actor.Id, Reason = reason });
+        Raise(new DecisionRecorded { CaseId = Id, Role = role, Approved = approved, Actor = actor, Reason = reason });
 
         if (!approved)
         {
@@ -94,7 +95,7 @@ public sealed class GovernanceCase
         }
     }
 
-    public void GrantWaiver(ActorRef actor, string reason, DateTimeOffset expiresAt, DateTimeOffset now)
+    public void GrantWaiver(AuditActor actor, string reason, DateTimeOffset expiresAt, DateTimeOffset now)
     {
         Require(actor, reason);
         if (expiresAt <= now) throw new GovernanceException("A waiver must expire in the future (time-bound).");
@@ -104,7 +105,7 @@ public sealed class GovernanceCase
         Raise(new WaiverGranted { CaseId = Id, ExpiresAt = expiresAt, Reason = reason });
     }
 
-    public void Recertify(ActorRef actor, string reason, DateTimeOffset nextDueAt, DateTimeOffset now)
+    public void Recertify(AuditActor actor, string reason, DateTimeOffset nextDueAt, DateTimeOffset now)
     {
         Require(actor, reason);
         if (nextDueAt <= now) throw new GovernanceException("Next recertification date must be in the future.");
@@ -114,7 +115,7 @@ public sealed class GovernanceCase
         Raise(new RecertificationCompleted { CaseId = Id, NextDueAt = nextDueAt });
     }
 
-    public void RequestRetirement(ActorRef actor, string reason)
+    public void RequestRetirement(AuditActor actor, string reason)
     {
         Require(actor, reason);
         Status = CaseStatus.Retired;
@@ -122,13 +123,13 @@ public sealed class GovernanceCase
         Raise(new RetirementRequested { CaseId = Id, AssetId = AssetId, Reason = reason });
     }
 
-    public void RecordReuseDecision(ReuseAction action, string justification, ActorRef actor, DateTimeOffset at)
+    public void RecordReuseDecision(ReuseAction action, string justification, AuditActor actor, DateTimeOffset at)
     {
         Require(actor, justification);
         ReuseAction = action;
         ReuseJustification = justification;
         Outcome = $"reuse:{action}";
-        Raise(new ReuseDecisionRecorded { CaseId = Id, AssetId = AssetId, Action = action.ToString(), Justification = justification, Actor = actor.Id });
+        Raise(new ReuseDecisionRecorded { CaseId = Id, AssetId = AssetId, Action = action.ToString(), Justification = justification, Actor = actor });
         // Flag-Never-Block: BuildNew is recorded like any other action; nothing is blocked.
     }
 
@@ -174,9 +175,9 @@ public sealed class GovernanceCase
 
     private void Raise(GovernanceEvent domainEvent) => _events.Add(domainEvent);
 
-    private static void Require(ActorRef actor, string reason)
+    private static void Require(AuditActor actor, string reason)
     {
-        if (actor is null || string.IsNullOrWhiteSpace(actor.Id)) throw new GovernanceException("An actor is required.");
+        if (!actor.IsValid) throw new GovernanceException("An actor is required.");
         if (string.IsNullOrWhiteSpace(reason)) throw new GovernanceException("A reason is required.");
     }
 }

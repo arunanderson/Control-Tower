@@ -1,4 +1,5 @@
 using ControlTower.Platform.Tenancy;
+using ControlTower.Platform.Identity;
 
 namespace ControlTower.Modules.Economics.Domain;
 
@@ -12,7 +13,7 @@ public enum BenefitType
 }
 
 /// <summary>One immutable point in a declaration's revision chain — nothing is ever overwritten (Stage 4 §2.6).</summary>
-public sealed record ValueRevision(EconomicFigure Figure, string Reason, string By, DateTimeOffset At);
+public sealed record ValueRevision(EconomicFigure Figure, string Reason, AuditActor By, DateTimeOffset At);
 
 /// <summary>
 /// A declared benefit for an asset (C3 aggregate, Stage 4 §2.6). Climbs the Finance validation ladder
@@ -23,9 +24,10 @@ public sealed class ValueDeclaration
 {
     private readonly List<ValueRevision> _revisions = [];
 
-    public ValueDeclaration(Guid id, TenantId tenant, Guid assetId, string assetType, BenefitType benefit, EconomicFigure declared, string declaredBy)
+    public ValueDeclaration(Guid id, TenantId tenant, Guid assetId, string assetType, BenefitType benefit, EconomicFigure declared, AuditActor declaredBy)
     {
         if (string.IsNullOrWhiteSpace(assetType)) throw new EconomicsException("Asset type is required for attribution.");
+        if (!declaredBy.IsValid) throw new EconomicsException("A declaration actor is required.");
         Id = id;
         Tenant = tenant;
         AssetId = assetId;
@@ -40,16 +42,17 @@ public sealed class ValueDeclaration
     public Guid AssetId { get; }
     public string AssetType { get; }
     public BenefitType Benefit { get; }
-    public string DeclaredBy { get; }
+    public AuditActor DeclaredBy { get; }
 
     public EconomicFigure Current => _revisions[^1].Figure;
     public ValidationState State => Current.Evidence.ValidationState;
     public IReadOnlyList<ValueRevision> Revisions => _revisions;
 
     /// <summary>Append a new revision (e.g. a Finance validation step). Forward-only; never overwrites history.</summary>
-    public void Revise(EconomicFigure updated, string reason, string by)
+    public void Revise(EconomicFigure updated, string reason, AuditActor by)
     {
         if (string.IsNullOrWhiteSpace(reason)) throw new EconomicsException("A revision reason is required.");
+        if (!by.IsValid) throw new EconomicsException("A revision actor is required.");
         if (updated.Evidence.ValidationState < State)
             throw new EconomicsException("Validation state cannot move backward (forward-only; use a formal restatement).");
         _revisions.Add(new ValueRevision(updated, reason, by, DateTimeOffset.UtcNow));

@@ -7,6 +7,7 @@ using ControlTower.Adapters.InMemory;
 using ControlTower.Modules.Providers.Application;
 using ControlTower.Modules.Providers.Domain;
 using ControlTower.Modules.Providers.Infrastructure;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 using Xunit;
 
@@ -42,6 +43,148 @@ public class ObservationIngestionTests
             yield break;
 #pragma warning restore CS0162
         }
+    }
+
+    private sealed class AuditIdentityProvider(
+        string surfaceId,
+        string? observationSurfaceId = null)
+        : IProvider
+    {
+        public bool AcquisitionAttempted { get; private set; }
+
+        public ProviderManifest Manifest { get; } = new()
+        {
+            SurfaceId = surfaceId,
+            DisplayName = "Audit identity test provider",
+            Version = "1.0.0",
+            Capabilities =
+                new HashSet<ProviderCapability>
+                {
+                    ProviderCapability.Inventory,
+                },
+            NativeIdentifierTypes = ["test:id"],
+            PayloadSchemaVersion = 1,
+            Auth = new ProviderAuthRequirement(
+                ProviderAuthKind.None,
+                [],
+                null),
+            FreshnessExpectation = TimeSpan.FromHours(1),
+        };
+
+        public Task<ProviderHealth> CheckHealthAsync(
+            ProviderConnectionContext context,
+            CancellationToken ct = default) =>
+            Task.FromResult(
+                new ProviderHealth(
+                    ProviderHealthStatus.Degraded,
+                    DateTimeOffset.UtcNow,
+                    "test"));
+
+        public async IAsyncEnumerable<RawObservation> AcquireAsync(
+            ProviderConnectionContext context,
+            ProviderCapability capability,
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            AcquisitionAttempted = true;
+            await Task.Yield();
+            if (observationSurfaceId is null)
+                yield break;
+
+            yield return new RawObservation
+            {
+                SurfaceId = observationSurfaceId,
+                Capability = capability,
+                NativeIdentifiers =
+                [
+                    new NativeIdentifier(
+                        surfaceId,
+                        "test:id",
+                        "observation-1"),
+                ],
+                Attributes =
+                    new Dictionary<string, string>(),
+                ObservedAt = DateTimeOffset.UtcNow,
+                EvidenceLabel = "Measured",
+            };
+        }
+    }
+
+    private sealed class ChangingManifestProvider : IProvider
+    {
+        private readonly ProviderManifest _first =
+            ManifestFor("provider:first");
+        private readonly ProviderManifest _later =
+            ManifestFor("provider:later");
+
+        public int ManifestReads { get; private set; }
+
+        public ProviderManifest Manifest
+        {
+            get
+            {
+                ManifestReads++;
+                return ManifestReads <= 3
+                    ? _first
+                    : _later;
+            }
+        }
+
+        public Task<ProviderHealth> CheckHealthAsync(
+            ProviderConnectionContext context,
+            CancellationToken ct = default) =>
+            Task.FromResult(
+                new ProviderHealth(
+                    ProviderHealthStatus.Healthy,
+                    DateTimeOffset.UtcNow,
+                    "test"));
+
+        public async IAsyncEnumerable<RawObservation>
+            AcquireAsync(
+                ProviderConnectionContext context,
+                ProviderCapability capability,
+                [EnumeratorCancellation]
+                CancellationToken ct = default)
+        {
+            await Task.Yield();
+            yield return new RawObservation
+            {
+                SurfaceId = _later.SurfaceId,
+                Capability = capability,
+                NativeIdentifiers =
+                [
+                    new NativeIdentifier(
+                        _later.SurfaceId,
+                        "test:id",
+                        "observation-1"),
+                ],
+                Attributes =
+                    new Dictionary<string, string>(),
+                ObservedAt = DateTimeOffset.UtcNow,
+                EvidenceLabel = "Measured",
+            };
+        }
+
+        private static ProviderManifest ManifestFor(
+            string surfaceId) =>
+            new()
+            {
+                SurfaceId = surfaceId,
+                DisplayName = surfaceId,
+                Version = "1.0.0",
+                Capabilities =
+                    new HashSet<ProviderCapability>
+                    {
+                        ProviderCapability.Inventory,
+                    },
+                NativeIdentifierTypes = ["test:id"],
+                PayloadSchemaVersion = 1,
+                Auth = new ProviderAuthRequirement(
+                    ProviderAuthKind.None,
+                    [],
+                    null),
+                FreshnessExpectation =
+                    TimeSpan.FromHours(1),
+            };
     }
 
     private sealed record Rig(
@@ -183,6 +326,173 @@ public class ObservationIngestionTests
 
         await Assert.ThrowsAsync<ProviderException>(() =>
             r.Service.IngestAsync(new CsvManualImportProvider(), CsvContext(TwoRows), ProviderCapability.Identity));
+    }
+
+    [Fact]
+    public async Task Provider_surface_identity_is_preserved_as_the_audit_actor()
+    {
+        const string surfaceId = "provider:custom/surface";
+        var r = Build();
+        var provider = new AuditIdentityProvider(surfaceId);
+        using var _ = r.Accessor.BeginScope(
+            new TenantId(Guid.NewGuid()));
+
+        await r.Service.IngestAsync(
+            provider,
+            CsvContext(TwoRows),
+            ProviderCapability.Inventory);
+
+        Assert.True(provider.AcquisitionAttempted);
+        var events = await r.Events.ReadAllAsync();
+        Assert.NotEmpty(events);
+        Assert.All(
+            events,
+            stored => Assert.Equal(
+                AuditActor.Provider(surfaceId),
+                stored.Actor));
+    }
+
+    [Fact]
+    public async Task Invalid_provider_audit_identity_is_rejected_before_acquisition_or_state()
+    {
+        var r = Build();
+        var provider =
+            new AuditIdentityProvider(new string('x', 129));
+        using var _ = r.Accessor.BeginScope(
+            new TenantId(Guid.NewGuid()));
+
+        var exception =
+            await Assert.ThrowsAsync<ProviderException>(
+                () => r.Service.IngestAsync(
+                    provider,
+                    CsvContext(TwoRows),
+                    ProviderCapability.Inventory));
+
+        Assert.Contains(
+            "invalid audit identity",
+            exception.Message,
+            StringComparison.Ordinal);
+        Assert.False(provider.AcquisitionAttempted);
+        Assert.Empty(await r.Store.ObservationsAsync());
+        Assert.Empty(await r.Store.RunsAsync());
+        Assert.Empty(await r.Events.ReadAllAsync());
+        Assert.Empty(await r.Outbox.DequeueBatchAsync(100));
+    }
+
+    [Fact]
+    public async Task Observation_surface_must_match_manifest_before_observation_state()
+    {
+        var r = Build();
+        var provider = new AuditIdentityProvider(
+            "provider:manifest",
+            "provider:other");
+        using var _ = r.Accessor.BeginScope(
+            new TenantId(Guid.NewGuid()));
+
+        var exception =
+            await Assert.ThrowsAsync<ProviderException>(
+                () => r.Service.IngestAsync(
+                    provider,
+                    CsvContext(TwoRows),
+                    ProviderCapability.Inventory));
+
+        Assert.Contains(
+            "manifest surface identity",
+            exception.Message,
+            StringComparison.Ordinal);
+        Assert.True(provider.AcquisitionAttempted);
+        Assert.Empty(await r.Store.ObservationsAsync());
+        var run = Assert.Single(await r.Store.RunsAsync());
+        Assert.Equal("Degraded", run.Outcome);
+        Assert.Equal(0, run.Observed);
+        var events = await r.Events.ReadAllAsync();
+        Assert.DoesNotContain(
+            events,
+            stored =>
+                stored.EventType
+                == "ObservationIngested");
+        Assert.Single(
+            events,
+            stored =>
+                stored.EventType
+                == "ProviderCoverageUpdated");
+        var messages =
+            await r.Outbox.DequeueBatchAsync(100);
+        Assert.DoesNotContain(
+            messages,
+            message =>
+                message.Topic
+                == ObservationIngestionService
+                    .ObservationIngestedTopic);
+    }
+
+    [Fact]
+    public async Task Provider_manifest_is_snapshotted_once_for_attribution()
+    {
+        var r = Build();
+        var provider = new ChangingManifestProvider();
+        using var _ = r.Accessor.BeginScope(
+            new TenantId(Guid.NewGuid()));
+
+        await Assert.ThrowsAsync<ProviderException>(
+            () => r.Service.IngestAsync(
+                provider,
+                CsvContext(TwoRows),
+                ProviderCapability.Inventory));
+
+        Assert.Equal(1, provider.ManifestReads);
+        Assert.Empty(await r.Store.ObservationsAsync());
+        var run = Assert.Single(await r.Store.RunsAsync());
+        Assert.Equal("provider:first", run.SurfaceId);
+        Assert.Equal("Degraded", run.Outcome);
+        var coverage = Assert.Single(
+            await r.Events.ReadAllAsync());
+        Assert.Equal(
+            AuditActor.Provider("provider:first"),
+            coverage.Actor);
+        Assert.DoesNotContain(
+            "provider:later",
+            System.Text.Encoding.UTF8.GetString(
+                coverage.Payload),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Invalid_connection_evidence_identity_is_rejected_before_acquisition_or_state()
+    {
+        var r = Build();
+        using var _ = r.Accessor.BeginScope(
+            new TenantId(Guid.NewGuid()));
+
+        foreach (var invalidConnectionId in new[]
+                 {
+                     " padded-connection ",
+                     new string('x', 257),
+                     "invalid\u0001connection",
+                     "invalid\uD800connection",
+                 })
+        {
+            var provider =
+                new AuditIdentityProvider(
+                    "provider:custom/surface");
+            await Assert.ThrowsAsync<ProviderException>(
+                () => r.Service.IngestAsync(
+                    provider,
+                    new ProviderConnectionContext(
+                        invalidConnectionId,
+                        string.Empty,
+                        new Dictionary<string, string>()),
+                    ProviderCapability.Inventory));
+
+            Assert.False(provider.AcquisitionAttempted);
+            Assert.Empty(
+                await r.Store.ObservationsAsync());
+            Assert.Empty(await r.Store.RunsAsync());
+            Assert.Empty(await r.Events.ReadAllAsync());
+            Assert.Empty(
+                await r.Outbox.DequeueBatchAsync(
+                    100));
+        }
     }
 
     [Fact]

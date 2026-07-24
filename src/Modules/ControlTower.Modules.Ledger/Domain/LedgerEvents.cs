@@ -1,4 +1,5 @@
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 
 namespace ControlTower.Modules.Ledger.Domain;
 
@@ -75,7 +76,7 @@ public sealed record ResolutionLinkAdded : LedgerEvent
 public sealed record ResolutionLinkSevered : LedgerEvent
 {
     public required Guid LinkId { get; init; }
-    public required string By { get; init; }
+    public required AuditActor By { get; init; }
     public required string Reason { get; init; }
 }
 
@@ -85,7 +86,7 @@ public sealed record ResolutionLinkSuperseded : LedgerEvent
 {
     public required Guid LinkId { get; init; }
     public required Guid BySupersedingLinkId { get; init; }
-    public required string By { get; init; }
+    public required AuditActor By { get; init; }
 }
 
 [DomainEventContract("MatchConfidenceChanged", EventPrivilege.Standard)]
@@ -100,7 +101,7 @@ public sealed record MatchConfidenceChanged : LedgerEvent
 public sealed record AssetMergedInto : LedgerEvent
 {
     public required LedgerAssetId TargetAssetId { get; init; }
-    public required string By { get; init; }
+    public required AuditActor By { get; init; }
 }
 
 /// <summary>Links were split out of this asset (AssetId) into NewAssetId.</summary>
@@ -108,7 +109,7 @@ public sealed record AssetMergedInto : LedgerEvent
 public sealed record AssetSplit : LedgerEvent
 {
     public required LedgerAssetId NewAssetId { get; init; }
-    public required string By { get; init; }
+    public required AuditActor By { get; init; }
 }
 
 /// <summary>A manual merge queue item was opened — identifier collision or ambiguous match (Stage 5 E8).</summary>
@@ -126,5 +127,5 @@ public sealed record MergeCaseResolved : LedgerEvent
 {
     public required Guid MergeCaseId { get; init; }
     public required string Outcome { get; init; }
-    public required string By { get; init; }
+    public required AuditActor By { get; init; }
 }
