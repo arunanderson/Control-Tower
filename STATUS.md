@@ -6,7 +6,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Current phase**   | Phase 1 — production security, privacy and durable-data foundation                                           |
 | **Current task**    | P1-T08 — persist the C8 E18/E19 foundations in PostgreSQL                                                    |
-| **Overall state**   | **P1-T08's approved fixture-only correction is locally green; PR #28 CI revalidation is pending.**           |
+| **Overall state**   | **P1-T08 is complete and green; the next implementation requires an approved bounded task contract.**        |
 | **Product outcome** | One role-appropriate Control Tower for all technically observable AI use across the corporate-managed estate |
 | **Merge policy**    | Merge trains — agent may merge tenant-independent green PRs with a Merge Readiness Report                    |
 | **Last updated**    | 2026-07-24                                                                                                   |
@@ -44,7 +44,8 @@ actor request boundary. PR #23 establishes tenant-scoped C8 role and capability 
 #24 connects the SPA to Entra delegated Bearer authentication and server-resolved access. PR #25
 hardens the canonical event envelope and integrity verifier. PR #26 completes the E20 semantic
 record and the C8 E18/E19 identity and authorization contracts. PR #27 persists the E20 kernel in
-PostgreSQL with forced RLS, immutable rows and tenant-serialized atomic append.
+PostgreSQL with forced RLS, immutable rows and tenant-serialized atomic append. PR #28 persists the
+C8 E18/E19 foundations with tenant isolation, privileged field protection and atomic E20 evidence.
 
 These are **implemented development slices**, not evidence that the production SaaS is finished.
 
@@ -82,12 +83,13 @@ suite are green on disposable `postgres:16.14-alpine3.24`. No shared, staging or
 migration ran; no production key provider, Host composition, cloud resource or WORM anchor was
 introduced.
 
-PR #28 is open. The Product Owner approved adding only
+The Product Owner approved adding only
 `tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs` to P1-T08's scope solely to normalize
 the stale timestamp fixture exposed by Linux CI. The fixture now uses the existing production
 canonicalizer; production validation and application code are unchanged. Fresh local verification
 is green: the targeted regression is 1/1, the backend is 253/253, PostgreSQL is 26/26, the hostile
-class is 12/12, architecture is 15/15 and the SPA is 114/114. PR CI revalidation is pending.
+class is 12/12, architecture is 15/15 and the SPA is 114/114. All nine PR #28 workflows are green,
+including Release build with zero warnings/errors, Linux backend, gitleaks and protected paths.
 
 ## Microsoft sandbox evidence
 
@@ -120,14 +122,12 @@ Microsoft Agent 365 is not a dependency for the Control Tower. It is one optiona
 
 ## Approval boundary
 
-P1-T08 is no longer blocked on correction scope. The exact one-file exception is approved,
-implemented and locally green. It remains unmergeable until all required PR checks rerun green and
-the final Merge Readiness Report has no findings.
+P1-T08 is complete and green. The exact one-file exception is approved and verified; all required
+local and PR checks pass, and the final Merge Readiness Report recommends merge.
 
-After that correction and a green PR merge, implementation still cannot start the next train because
-the repository contains no approved incomplete post-P1-T08 task contract. The recorded direction is
-telemetry-policy, jurisdiction, privacy Gate 2 and policy-as-of Gate 1, but a bounded approved
-contract must name its exact first slice.
+Implementation cannot start the next train because the repository contains no approved incomplete
+post-P1-T08 task contract. The recorded direction is telemetry-policy, jurisdiction, privacy Gate 2
+and policy-as-of Gate 1, but a bounded approved contract must name its exact first slice.
 
 Endpoint or browser events will not be onboarded before the privacy boundary is real.
 
