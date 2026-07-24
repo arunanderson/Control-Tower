@@ -8,8 +8,8 @@ project:
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
 current_phase: PHASE-1 # return to the production foundation critical path; later domain slices exist in development form
 current_epic: EPIC-1-2 # production security, privacy and durable-data foundation
-current_task: P1-T06 # complete E20 and C8 E18/E19 contracts
-status: in_progress # E20 and C8 semantic contracts are green; durable production foundations remain
+current_task: P1-T07 # persist the E20 event kernel in PostgreSQL
+status: in_progress # migration 0001 and the durable adapter are under ephemeral validation
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
 product_outcome:
@@ -118,6 +118,11 @@ tasks:
       status: complete,
     }
   - {
+      id: P1-T07,
+      title: "Persist the E20 event kernel in PostgreSQL",
+      status: in-progress,
+    }
+  - {
       id: P2-T01,
       title: "Asset Ledger (C1) — aggregate, state machines, ownership, aliases, events, read model, workflow",
       status: complete,
@@ -202,6 +207,14 @@ deviations:
       title: "Enterprise-wide observable AI coverage in V1",
       status: approved-with-conditions,
     }
+migrations:
+  - id: "0001"
+    title: "E20 PostgreSQL event kernel"
+    status: authored
+    ephemeral: pending
+    shared: never-executed
+    staging: never-executed
+    production: never-executed
 merged_prs:
   - { number: 1, title: Phase 0 bootstrap }
   - { number: 3, title: E2 platform skeleton }
@@ -252,4 +265,4 @@ next_trains:
   - "P5-T04 retention mechanism remains behind an authoritative versioned Legal-owned jurisdiction-policy provider; production policy values are a human gate."
   - "P0-T16 rerun requires representative agent archetypes and an Agent 365 licence; current sandbox findings are informative but inconclusive."
 test_summary: "224 backend tests green (Platform 31, Ledger 31, Governance 19, Economics 23, Providers 29, Architecture 12, Host.Web 79) + 114 SPA tests (13 vitest files); 0 vulnerable production packages"
-last_updated_by: P1-T06
+last_updated_by: P1-T07

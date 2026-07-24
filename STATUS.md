@@ -5,8 +5,8 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | Field               | Value                                                                                                        |
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Current phase**   | Phase 1 — production security, privacy and durable-data foundation                                           |
-| **Current task**    | P1-T06 — complete E20 audit metadata and C8 E18/E19 contracts                                                |
-| **Overall state**   | **Complete E20 and C8 semantic contracts are green; durable production foundations remain.**                 |
+| **Current task**    | P1-T07 — persist the E20 event kernel in PostgreSQL                                                          |
+| **Overall state**   | **Migration 0001 and the durable E20 adapter are in ephemeral-only validation.**                              |
 | **Product outcome** | One role-appropriate Control Tower for all technically observable AI use across the corporate-managed estate |
 | **Merge policy**    | Merge trains — agent may merge tenant-independent green PRs with a Merge Readiness Report                    |
 | **Last updated**    | 2026-07-24                                                                                                   |
@@ -67,9 +67,12 @@ now freeze the complete E20 and C8 semantics before durable storage:
 - Host resolves the human to `PersonKey` once and persists only the server-resolved opaque actor;
 - invalid evidence and provider-attribution mismatch fail before domain/observation mutation.
 
-The tenant-independent implementation is locally proven with 224 backend and 114 SPA tests.
-P1-T07/P1-T08 may now persist these frozen contracts; this is not yet a durable E20/E18/E19 or
-production-evidence claim.
+The prior tenant-independent implementation is locally proven with 224 backend and 114 SPA tests.
+P1-T07 now adds the first durable implementation behind the unchanged event-store port: migration
+0001, forced RLS, a non-owner runtime role, transaction-local tenant binding, database-enforced
+immutability and atomic tenant-stream serialization. Its migration is being exercised only against
+the approved disposable PostgreSQL image. Host composition, WORM anchoring and shared, staging or
+production migration execution remain out of scope.
 
 ## Microsoft sandbox evidence
 
