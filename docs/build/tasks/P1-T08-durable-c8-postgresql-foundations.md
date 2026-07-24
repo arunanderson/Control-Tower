@@ -5,7 +5,7 @@ type: task-contract
 schema_version: 1
 epic: EPIC-1-2
 phase: PHASE-1
-status: blocked
+status: in-progress
 objective: Implement the frozen E18 RoleAssignment and E19 PersonKeyMap ports as tenant-isolated PostgreSQL adapters, author migration 0002, and prove atomic eventing, privileged field protection and O(1) severance only against disposable PostgreSQL 16 containers.
 blueprint_refs:
   - docs/blueprint/stage-05-conceptual-data-model.md#e19-personkeymap--the-gdpr-severance-point
@@ -27,6 +27,7 @@ allowed_files:
   - tests/ControlTower.Adapters.PostgreSql.Tests/**
   - tests/ControlTower.ArchitectureTests/AdapterBoundaryTests.cs
   - tests/ControlTower.ArchitectureTests/ControlTower.ArchitectureTests.csproj
+  - tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs
   - db/migrations/0002_c8_identity_authorization.sql
   - db/migrations/0002_c8_identity_authorization.down.sql
   - db/migrations/0002_c8_identity_authorization.verify.sql
@@ -64,6 +65,7 @@ preconditions:
   - P1-T06 has frozen the E18 versioning and E19 privileged-access severance contracts that this task persists unchanged
   - DEC-001 selects Azure Database for PostgreSQL Flexible Server behind an adapter and permits local Docker PostgreSQL only as a disposable development substitute
   - The Product Owner explicitly approved P1-T05 through P1-T08 including C8 interface and event-backbone changes Npgsql 10.0.3 PostgreSQL 16.14 Alpine 3.24 ephemeral testing and authoring plus green-CI merge of migrations 0001 and 0002 on 2026-07-23
+  - The Product Owner explicitly approved adding only tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs to the P1-T08 file scope solely to normalize the stale DateTimeOffset fixture on 2026-07-24
   - No shared staging or production migration execution is authorised
 required_tests:
   - migration 0002 applies after migration 0001 under a distinct migration owner against postgres 16.14-alpine3.24

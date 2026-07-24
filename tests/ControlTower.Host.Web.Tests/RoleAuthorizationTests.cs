@@ -688,7 +688,9 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         using var _ = tenants.BeginScope(tenant);
         var events = new CapturingEventStore();
         var store = new InMemoryRoleAssignmentStore(tenants, events);
-        var assignedAt = DateTimeOffset.UtcNow;
+        var assignedAt =
+            EventEnvelopeCanonicalizer.NormalizeTimestamp(
+                DateTimeOffset.UtcNow);
         var actor = AuditActor.System("test");
         var assignment = new RoleAssignment(
             Guid.NewGuid(),

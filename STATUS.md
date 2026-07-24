@@ -6,7 +6,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Current phase**   | Phase 1 — production security, privacy and durable-data foundation                                           |
 | **Current task**    | P1-T08 — persist the C8 E18/E19 foundations in PostgreSQL                                                    |
-| **Overall state**   | **P1-T08 is blocked at PR #28's CI trust boundary on one forbidden-path Host test-fixture correction.**      |
+| **Overall state**   | **P1-T08's approved fixture-only correction is locally green; PR #28 CI revalidation is pending.**           |
 | **Product outcome** | One role-appropriate Control Tower for all technically observable AI use across the corporate-managed estate |
 | **Merge policy**    | Merge trains — agent may merge tenant-independent green PRs with a Merge Readiness Report                    |
 | **Last updated**    | 2026-07-24                                                                                                   |
@@ -82,14 +82,12 @@ suite are green on disposable `postgres:16.14-alpine3.24`. No shared, staging or
 migration ran; no production key provider, Host composition, cloud resource or WORM anchor was
 introduced.
 
-PR #28 is open. Eight of nine CI workflows are green, including the architecture, migration 0002
-PostgreSQL suite, dependency, format, protected-path, secret, task-contract, readiness and SPA
-gates. The combined `build-test` workflow passed 252 of 253 backend tests but exposed one
-cross-platform test-fixture defect: a pre-existing Host test supplies unnormalised
-`DateTimeOffset.UtcNow` while P1-T08 correctly rejects non-UTC-microsecond E18 timestamps. The
-minimum correct change is confined to
-`tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs`, which the approved P1-T08 contract
-forbids. Production validation will not be weakened to accommodate the stale test.
+PR #28 is open. The Product Owner approved adding only
+`tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs` to P1-T08's scope solely to normalize
+the stale timestamp fixture exposed by Linux CI. The fixture now uses the existing production
+canonicalizer; production validation and application code are unchanged. Fresh local verification
+is green: the targeted regression is 1/1, the backend is 253/253, PostgreSQL is 26/26, the hostile
+class is 12/12, architecture is 15/15 and the SPA is 114/114. PR CI revalidation is pending.
 
 ## Microsoft sandbox evidence
 
@@ -122,10 +120,9 @@ Microsoft Agent 365 is not a dependency for the Control Tower. It is one optiona
 
 ## Approval boundary
 
-P1-T08 is blocked at the CI trust boundary. Product Owner approval is required to add exactly
-`tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs` to P1-T08's allowed files and
-normalise that test's timestamp fixture. No production behavior, dependency, abstraction or
-security control change is requested.
+P1-T08 is no longer blocked on correction scope. The exact one-file exception is approved,
+implemented and locally green. It remains unmergeable until all required PR checks rerun green and
+the final Merge Readiness Report has no findings.
 
 After that correction and a green PR merge, implementation still cannot start the next train because
 the repository contains no approved incomplete post-P1-T08 task contract. The recorded direction is
@@ -136,7 +133,6 @@ Endpoint or browser events will not be onboarded before the privacy boundary is 
 
 ## Human gates
 
-- Immediate: approve the one-file P1-T08 CI-fixture scope correction described above.
 - Immediate after P1-T08 merge: approve the bounded next task contract; none currently exists.
 
 - Representative Microsoft tenant/licensing and consent when a real-provider validation task reaches

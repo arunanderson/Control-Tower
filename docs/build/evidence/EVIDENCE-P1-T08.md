@@ -259,3 +259,44 @@ scope amendment.
 - Deviation requested: none. Exact task-scope amendment required for one test file.
 - Merge recommendation: **do not merge** until the one-file scope amendment is approved, corrected
   and all CI gates are green.
+
+## Approved one-file exception and local revalidation
+
+On 2026-07-24, the Product Owner approved adding only
+`tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs` to the P1-T08 allowed-file scope,
+solely to normalize the stale `DateTimeOffset` fixture. The approval explicitly prohibited changes
+to production timestamp validation, application code, unrelated tests, dependencies, abstractions,
+refactors, security controls or any broader task scope.
+
+The correction normalizes the existing `assignedAt` test value with the existing
+`EventEnvelopeCanonicalizer.NormalizeTimestamp` before constructing the fixture. No application or
+production file changed as part of the correction.
+
+Fresh local verification after the correction produced:
+
+| Gate                                     | Result                                |
+| ---------------------------------------- | ------------------------------------- |
+| Previously failing Host regression       | 1/1 passed                            |
+| Release restore/build                    | Passed; 0 warnings, 0 errors          |
+| Expanded P1-T08 hostile PostgreSQL class | 12/12 passed                          |
+| Full PostgreSQL adapter suite            | 26/26 passed                          |
+| Full backend solution                    | 253/253 passed                        |
+| Standalone architecture gate             | 15/15 passed                          |
+| SPA build                                | Passed; 187 modules                   |
+| SPA tests                                | 114/114 passed across 13 files        |
+| NuGet vulnerable-package scan            | 0 vulnerable packages                 |
+| npm shipped-production audit             | 0 vulnerabilities                     |
+| Prettier Markdown/YAML/JSON check        | Passed                                |
+| Task-contract validation                 | 28 contracts; 0 errors, 0 warnings    |
+| Protected-path guard                     | Passed; no blueprint/approval changes |
+| DEV-001 production-readiness guard       | Passed                                |
+| Diff whitespace check                    | Passed                                |
+| Independent correction-scope review      | No findings                           |
+
+The database suites used fresh disposable `postgres:16.14-alpine3.24` containers and loopback-only
+generated databases and roles. Migration 0002 apply/verify/rollback/reapply evidence remained green.
+No shared, staging or production migration ran.
+
+PR #28 requires a fresh GitHub Actions run for the correction commit. GitHub gitleaks remains the
+authoritative secret scan. Until every required PR check is green, the merge recommendation remains
+**do not merge**.
