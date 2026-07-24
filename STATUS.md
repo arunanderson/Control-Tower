@@ -6,7 +6,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Current phase**   | Phase 1 — production security, privacy and durable-data foundation                                           |
 | **Current task**    | P1-T07 — persist the E20 event kernel in PostgreSQL                                                          |
-| **Overall state**   | **Migration 0001 and the durable E20 adapter are in ephemeral-only validation.**                              |
+| **Overall state**   | **Migration 0001 and the durable E20 adapter are in ephemeral-only validation.**                             |
 | **Product outcome** | One role-appropriate Control Tower for all technically observable AI use across the corporate-managed estate |
 | **Merge policy**    | Merge trains — agent may merge tenant-independent green PRs with a Merge Readiness Report                    |
 | **Last updated**    | 2026-07-24                                                                                                   |
