@@ -40,6 +40,8 @@ public sealed class PostgreSqlEventStore : IEventStore
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        var tenantCapture =
+            PostgreSqlTenantCapture.Capture(_tenants);
         var request = PostgreSqlEventAppendRequest.Capture(
             @event,
             metadata,
@@ -59,7 +61,7 @@ public sealed class PostgreSqlEventStore : IEventStore
                 await PostgreSqlTenantTransaction.BindAsync(
                         connection,
                         transaction,
-                        _tenants,
+                        tenantCapture,
                         ct)
                     .ConfigureAwait(false);
 
@@ -84,6 +86,8 @@ public sealed class PostgreSqlEventStore : IEventStore
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        var tenantCapture =
+            PostgreSqlTenantCapture.Capture(_tenants);
 
         try
         {
@@ -99,7 +103,7 @@ public sealed class PostgreSqlEventStore : IEventStore
                 await PostgreSqlTenantTransaction.BindAsync(
                         connection,
                         transaction,
-                        _tenants,
+                        tenantCapture,
                         ct)
                     .ConfigureAwait(false);
             var tenant = tenantTransaction.Tenant;
@@ -226,53 +230,27 @@ public sealed class PostgreSqlEventStore : IEventStore
 }
 
 /// <summary>
-/// Non-owning, tenant-bound PostgreSQL transaction scope. The scope captures the ambient tenant
-/// before binding, cannot be retargeted, and never commits, rolls back or disposes its handles.
-/// Callers must not use a connection or transaction concurrently.
+/// Opaque tenant authority captured from the ambient accessor before caller-controlled work or I/O.
+/// The captured authority cannot be constructed from an arbitrary tenant identifier.
 /// </summary>
-public sealed class PostgreSqlTenantTransaction
+public sealed class PostgreSqlTenantCapture
 {
     private readonly ITenantContextAccessor _tenants;
 
-    private PostgreSqlTenantTransaction(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
+    private PostgreSqlTenantCapture(
         ITenantContextAccessor tenants,
         TenantId tenant)
     {
-        Connection = connection;
-        Transaction = transaction;
         _tenants = tenants;
         Tenant = tenant;
     }
 
-    internal NpgsqlConnection Connection { get; }
-
-    internal NpgsqlTransaction Transaction { get; }
-
     public TenantId Tenant { get; }
 
-    /// <summary>
-    /// Captures the ambient tenant exactly once and binds it transaction-locally. Rebinding the same
-    /// transaction to the same tenant is idempotent; a different existing binding is rejected.
-    /// </summary>
-    public static ValueTask<PostgreSqlTenantTransaction> BindAsync(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
-        ITenantContextAccessor tenants,
-        CancellationToken ct = default)
+    public static PostgreSqlTenantCapture Capture(
+        ITenantContextAccessor tenants)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(transaction);
         ArgumentNullException.ThrowIfNull(tenants);
-        ct.ThrowIfCancellationRequested();
-        if (!ReferenceEquals(transaction.Connection, connection))
-        {
-            throw new ArgumentException(
-                "The transaction does not belong to the supplied connection.",
-                nameof(transaction));
-        }
-
         var tenant = tenants.Current;
         if (tenant.Value == Guid.Empty)
         {
@@ -280,12 +258,9 @@ public sealed class PostgreSqlTenantTransaction
                 "The database tenant context is invalid.");
         }
 
-        return BindCapturedAsync(
-            connection,
-            transaction,
+        return new PostgreSqlTenantCapture(
             tenants,
-            tenant,
-            ct);
+            tenant);
     }
 
     internal void EnsureAmbientTenant()
@@ -303,26 +278,96 @@ public sealed class PostgreSqlTenantTransaction
         throw new EventIntegrityException(
             "The database tenant context is invalid.");
     }
+}
+
+/// <summary>
+/// Non-owning, tenant-bound PostgreSQL transaction scope. The scope captures the ambient tenant
+/// before binding, cannot be retargeted, and never commits, rolls back or disposes its handles.
+/// Callers must not use a connection or transaction concurrently.
+/// </summary>
+public sealed class PostgreSqlTenantTransaction
+{
+    private readonly PostgreSqlTenantCapture _tenantCapture;
+
+    private PostgreSqlTenantTransaction(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        PostgreSqlTenantCapture tenantCapture)
+    {
+        Connection = connection;
+        Transaction = transaction;
+        _tenantCapture = tenantCapture;
+    }
+
+    internal NpgsqlConnection Connection { get; }
+
+    internal NpgsqlTransaction Transaction { get; }
+
+    public TenantId Tenant => _tenantCapture.Tenant;
+
+    /// <summary>
+    /// Binds an already-captured ambient tenant transaction-locally. Rebinding the same transaction
+    /// to the same tenant is idempotent; a different existing binding is rejected.
+    /// </summary>
+    public static ValueTask<PostgreSqlTenantTransaction> BindAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        PostgreSqlTenantCapture tenantCapture,
+        CancellationToken ct = default)
+    {
+        ValidateBindingArguments(
+            connection,
+            transaction,
+            tenantCapture,
+            ct);
+        tenantCapture.EnsureAmbientTenant();
+        return BindCoreAsync(
+            connection,
+            transaction,
+            tenantCapture,
+            ct);
+    }
+
+    internal void EnsureAmbientTenant()
+    {
+        _tenantCapture.EnsureAmbientTenant();
+    }
+
+    private static void ValidateBindingArguments(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        PostgreSqlTenantCapture tenantCapture,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        ArgumentNullException.ThrowIfNull(tenantCapture);
+        ct.ThrowIfCancellationRequested();
+        if (!ReferenceEquals(transaction.Connection, connection))
+        {
+            throw new ArgumentException(
+                "The transaction does not belong to the supplied connection.",
+                nameof(transaction));
+        }
+    }
 
     private static async ValueTask<PostgreSqlTenantTransaction>
-        BindCapturedAsync(
+        BindCoreAsync(
             NpgsqlConnection connection,
             NpgsqlTransaction transaction,
-            ITenantContextAccessor tenants,
-            TenantId tenant,
+            PostgreSqlTenantCapture tenantCapture,
             CancellationToken ct)
     {
         await PostgreSqlTenantBinding.BindAsync(
                 connection,
                 transaction,
-                tenant,
+                tenantCapture.Tenant,
                 ct)
             .ConfigureAwait(false);
         return new PostgreSqlTenantTransaction(
             connection,
             transaction,
-            tenants,
-            tenant);
+            tenantCapture);
     }
 }
 

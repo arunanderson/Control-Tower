@@ -139,7 +139,7 @@ public sealed class PostgreSqlEventStoreTests(
     }
 
     [Fact]
-    public async Task Append_snapshots_mutable_input_once_before_database_wait()
+    public async Task Append_snapshots_tenant_and_mutable_input_before_database_wait()
     {
         if (!fixture.Enabled)
             return;
@@ -198,6 +198,48 @@ public sealed class PostgreSqlEventStoreTests(
         Assert.Equal(firstEventId, stored.EventId);
         Assert.Equal(firstOccurredAt, stored.OccurredAt);
         Assert.Equal(new byte[] { 0x10, 0x20 }, stored.Payload);
+
+        var originalTenant = NewTenant();
+        var switchedTenant = NewTenant();
+        var switchingEvent = new TenantSwitchingTestEvent(
+            tenants,
+            switchedTenant,
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow);
+        EventIntegrityException rejected;
+        using (tenants.BeginScope(originalTenant))
+        {
+            try
+            {
+                rejected =
+                    await Assert.ThrowsAsync<EventIntegrityException>(
+                        () => store.AppendAsync(
+                                switchingEvent,
+                                Metadata(
+                                    AuditActor.System("tenant-snapshot")),
+                                ReadOnlyMemory<byte>.Empty)
+                            .AsTask());
+            }
+            finally
+            {
+                switchingEvent.DisposeSwitch();
+            }
+        }
+
+        Assert.Equal(
+            "The database tenant context is invalid.",
+            rejected.Message);
+        Assert.Null(rejected.InnerException);
+        AssertSafeFailure(
+            rejected.Message,
+            originalTenant,
+            switchedTenant);
+        Assert.Equal(
+            (0L, 0L),
+            await CountTenantStateAsync(originalTenant));
+        Assert.Equal(
+            (0L, 0L),
+            await CountTenantStateAsync(switchedTenant));
     }
 
     [Fact]
@@ -584,16 +626,18 @@ public sealed class PostgreSqlEventStoreTests(
         {
             using (tenants.BeginScope(tenantA))
             {
+                var tenantCapture =
+                    PostgreSqlTenantCapture.Capture(tenants);
                 var firstBinding =
                     await PostgreSqlTenantTransaction.BindAsync(
                         connection,
                         transaction,
-                        tenants);
+                        tenantCapture);
                 var repeatedBinding =
                     await PostgreSqlTenantTransaction.BindAsync(
                         connection,
                         transaction,
-                        tenants);
+                        tenantCapture);
                 Assert.Equal(tenantA, firstBinding.Tenant);
                 Assert.Equal(tenantA, repeatedBinding.Tenant);
 
@@ -621,11 +665,13 @@ public sealed class PostgreSqlEventStoreTests(
             PostgreSqlTenantTransaction boundTenant;
             using (tenants.BeginScope(tenantA))
             {
+                var tenantCapture =
+                    PostgreSqlTenantCapture.Capture(tenants);
                 boundTenant =
                     await PostgreSqlTenantTransaction.BindAsync(
                         connection,
                         transaction,
-                        tenants);
+                        tenantCapture);
                 var uncommitted =
                     await appender.AppendWithinTransactionAsync(
                         boundTenant,
@@ -652,7 +698,8 @@ public sealed class PostgreSqlEventStoreTests(
                         () => PostgreSqlTenantTransaction.BindAsync(
                                 connection,
                                 transaction,
-                                tenants)
+                                PostgreSqlTenantCapture.Capture(
+                                    tenants))
                             .AsTask());
                 Assert.Equal(
                     "The database tenant context is invalid.",
@@ -685,11 +732,13 @@ public sealed class PostgreSqlEventStoreTests(
             await fixture.RuntimeDataSource.OpenConnectionAsync())
         using (tenants.BeginScope(tenantA))
         {
+            var tenantCapture =
+                PostgreSqlTenantCapture.Capture(tenants);
             _ = await Assert.ThrowsAsync<ArgumentException>(
                 () => PostgreSqlTenantTransaction.BindAsync(
                         secondConnection,
                         firstTransaction,
-                        tenants)
+                        tenantCapture)
                     .AsTask());
             await firstTransaction.RollbackAsync();
         }
@@ -1305,6 +1354,35 @@ public sealed class PostgreSqlEventStoreTests(
                 OccurredAtReadCount++;
                 return CurrentOccurredAt;
             }
+        }
+    }
+
+    [DomainEventContract(
+        "tests.postgresql.tenant-switching.v1",
+        EventPrivilege.Standard)]
+    private sealed class TenantSwitchingTestEvent(
+        ITenantContextAccessor tenants,
+        TenantId switchedTenant,
+        Guid eventId,
+        DateTimeOffset occurredAt) : IDomainEvent
+    {
+        private IDisposable? _switchScope;
+
+        public Guid EventId
+        {
+            get
+            {
+                _switchScope ??= tenants.BeginScope(switchedTenant);
+                return eventId;
+            }
+        }
+
+        public DateTimeOffset OccurredAt => occurredAt;
+
+        public void DisposeSwitch()
+        {
+            _switchScope?.Dispose();
+            _switchScope = null;
         }
     }
 
