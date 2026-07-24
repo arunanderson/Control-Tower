@@ -365,7 +365,7 @@ public sealed class PostgreSqlEventKernelFixture : IAsyncLifetime
 
                 SELECT
                     'relation|' || relation.relname || '|' ||
-                    relation.relkind || '|' ||
+                    relation.relkind::text || '|' ||
                     relation.relrowsecurity::text || '|' ||
                     relation.relforcerowsecurity::text || '|' ||
                     coalesce(relation.relacl::text, '')
