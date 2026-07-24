@@ -1,3 +1,4 @@
+using ControlTower.Platform.Privacy;
 using ControlTower.Platform.Tenancy;
 
 namespace ControlTower.Modules.Providers.Domain;
