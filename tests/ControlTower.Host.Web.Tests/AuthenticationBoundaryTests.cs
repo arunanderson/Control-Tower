@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using ControlTower.Host.Web.Authentication;
 using ControlTower.Modules.Trust.Authorization;
+using ControlTower.Platform.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -322,12 +323,33 @@ public class AuthenticationBoundaryTests(LocalJwtWebFactory factory)
             internalB,
             directoryB,
             actorB);
+        var identityA = await AssertIdentity(
+            clientA,
+            internalA,
+            directoryA,
+            actorA);
+        var identityB = await AssertIdentity(
+            clientB,
+            internalB,
+            directoryB,
+            actorB);
+        Assert.NotEqual(identityA.Actor, identityB.Actor);
 
         var requests = Enumerable.Range(0, 20)
             .SelectMany(_ => new[]
             {
-                AssertIdentity(clientA, internalA, directoryA, actorA),
-                AssertIdentity(clientB, internalB, directoryB, actorB),
+                AssertIdentity(
+                    clientA,
+                    internalA,
+                    directoryA,
+                    actorA,
+                    identityA.Actor),
+                AssertIdentity(
+                    clientB,
+                    internalB,
+                    directoryB,
+                    actorB,
+                    identityB.Actor),
             });
 
         await Task.WhenAll(requests);
@@ -395,18 +417,37 @@ public class AuthenticationBoundaryTests(LocalJwtWebFactory factory)
         }
     }
 
-    private static async Task AssertIdentity(
+    private static async Task<WhoAmI> AssertIdentity(
         HttpClient client,
         Guid internalTenant,
         Guid directoryTenant,
-        Guid objectId)
+        Guid objectId,
+        string? expectedActor = null)
     {
         var identity = await client.GetFromJsonAsync<WhoAmI>("/whoami");
         Assert.Equal(internalTenant.ToString(), identity!.Tenant);
-        Assert.Equal(directoryTenant, identity.DirectoryTenant);
-        Assert.Equal(
-            $"entra:{directoryTenant:D}:{objectId:D}",
-            identity.Actor);
+        Assert.NotNull(identity.Actor);
+        Assert.StartsWith(
+            "person:",
+            identity.Actor,
+            StringComparison.Ordinal);
+        Assert.True(
+            Guid.TryParseExact(
+                identity.Actor["person:".Length..],
+                "D",
+                out var personKey));
+        Assert.NotEqual(Guid.Empty, personKey);
+        Assert.DoesNotContain(
+            directoryTenant.ToString("D"),
+            identity.Actor,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            objectId.ToString("D"),
+            identity.Actor,
+            StringComparison.OrdinalIgnoreCase);
+        if (expectedActor is not null)
+            Assert.Equal(expectedActor, identity.Actor);
+        return identity;
     }
 
     private static async Task AssertGenericChallenge(HttpResponseMessage response)
@@ -423,6 +464,5 @@ public class AuthenticationBoundaryTests(LocalJwtWebFactory factory)
 
     private sealed record WhoAmI(
         string Tenant,
-        Guid DirectoryTenant,
-        string Actor);
+        string? Actor);
 }

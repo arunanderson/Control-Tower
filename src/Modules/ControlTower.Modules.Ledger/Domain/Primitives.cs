@@ -1,4 +1,5 @@
 using ControlTower.Platform.Tenancy;
+using ControlTower.Platform.Identity;
 
 namespace ControlTower.Modules.Ledger.Domain;
 
@@ -109,8 +110,21 @@ public readonly record struct AssetType
     public override string ToString() => Value;
 }
 
-/// <summary>A reference to a person — people are references, never aggregates (Stage 4 §11.2).</summary>
-public sealed record PersonRef(string EntraObjectId, string DisplayName);
+/// <summary>
+/// A reference to a person — opaque E19 PersonKey only; people are never aggregates.
+/// </summary>
+public sealed record PersonRef
+{
+    public PersonRef(PersonKey personKey)
+    {
+        if (!personKey.IsValid)
+            throw new DomainException("A PersonKey is required.");
+
+        PersonKey = personKey;
+    }
+
+    public PersonKey PersonKey { get; }
+}
 
 /// <summary>One native identifier as a provider surface reports it.</summary>
 public sealed record NativeIdentifier(string System, string IdentifierType, string Value);

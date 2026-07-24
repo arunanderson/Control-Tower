@@ -1,9 +1,12 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using ControlTower.Adapters.InMemory;
 using ControlTower.Platform.Audit;
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ControlTower.Platform.Tests;
 
@@ -46,16 +49,26 @@ public class EventBackboneTests
         {
             first = await rig.Store.AppendAsync(
                 new TestEvent(Guid.NewGuid(), occurredAt),
+                Metadata(),
                 source);
             second = await rig.Store.AppendAsync(
                 new TestEvent(Guid.NewGuid(), occurredAt.AddSeconds(1)),
+                Metadata("aggregate-2"),
                 Payload("two"));
         }
 
-        Assert.Equal(1, first.IntegrityFormatVersion);
+        Assert.Equal(2, first.IntegrityFormatVersion);
         Assert.Equal(1, first.Position);
         Assert.Equal(2, second.Position);
         Assert.Equal(nameof(TestEvent), first.EventType);
+        Assert.Equal(
+            new EventReference("test-aggregate", "aggregate-1"),
+            first.AggregateReference);
+        Assert.Equal(AuditActor.System("platform-test"), first.Actor);
+        Assert.Equal("event-backbone-test", first.Reason);
+        Assert.Equal(
+            new EventReference("request", "request-1"),
+            first.CorrelationReference);
         Assert.Equal(EventPrivilege.Standard, first.Privilege);
         Assert.Equal(TimeSpan.Zero, first.OccurredAt.Offset);
         Assert.Equal(0, first.OccurredAt.Ticks % TimeSpan.TicksPerMicrosecond);
@@ -80,7 +93,12 @@ public class EventBackboneTests
         var source = new CountingEvent(Guid.NewGuid(), FixedNow);
 
         using (rig.Tenants.BeginScope(Tenant))
-            await rig.Store.AppendAsync(source, Payload("event"));
+        {
+            await rig.Store.AppendAsync(
+                source,
+                Metadata(),
+                Payload("event"));
+        }
 
         Assert.Equal(1, source.EventIdReads);
         Assert.Equal(1, source.OccurredAtReads);
@@ -122,6 +140,50 @@ public class EventBackboneTests
     }
 
     [Fact]
+    public void Optional_metadata_presence_has_distinct_canonical_bytes_and_hashes()
+    {
+        var absent = Stored() with
+        {
+            Reason = null,
+            CorrelationReference = null,
+        };
+        var reasonPresent = absent with
+        {
+            Reason = "r",
+        };
+        var correlationPresent = absent with
+        {
+            CorrelationReference =
+                new EventReference("request", "r"),
+        };
+        var bothPresent = reasonPresent with
+        {
+            CorrelationReference =
+                new EventReference("request", "r"),
+        };
+        var values = new[]
+        {
+            absent,
+            reasonPresent,
+            correlationPresent,
+            bothPresent,
+        };
+        var canonical = values
+            .Select(EventEnvelopeCanonicalizer.Canonicalize)
+            .Select(bytes => Convert.ToHexString(bytes))
+            .ToArray();
+        var chain = new Sha256HashChain();
+        var hashes = values
+            .Select(value => chain.ComputeNext(
+                Sha256HashChain.Genesis,
+                EventEnvelopeCanonicalizer.Canonicalize(value)))
+            .ToArray();
+
+        Assert.Equal(values.Length, canonical.Distinct().Count());
+        Assert.Equal(values.Length, hashes.Distinct().Count());
+    }
+
+    [Fact]
     public void Canonical_envelope_matches_the_cross_platform_format_vector()
     {
         var stored = new StoredEvent(
@@ -129,8 +191,12 @@ public class EventBackboneTests
             1,
             Guid.Parse("ffeeddcc-bbaa-9988-7766-554433221100"),
             nameof(TestEvent),
+            new EventReference("test-aggregate", "aggregate-001"),
+            AuditActor.Provider("provider-01"),
             DateTimeOffset.UnixEpoch.AddTicks(12_345_670),
             DateTimeOffset.UnixEpoch.AddTicks(-9_999_990),
+            "why",
+            new EventReference("request", "abc-123"),
             new TenantId(
                 Guid.Parse("00112233-4455-6677-8899-aabbccddeeff")),
             EventPrivilege.Standard,
@@ -142,18 +208,25 @@ public class EventBackboneTests
         var hash = new Sha256HashChain().ComputeNext(
             Sha256HashChain.Genesis,
             canonical);
+        var chained = new Sha256HashChain().ComputeNext(hash, canonical);
 
         Assert.Equal(
-            "00000001000000000000000100112233445566778899AABBCCDDEEFF"
+            "00000002000000000000000100112233445566778899AABBCCDDEEFF"
             + "FFEEDDCCBBAA9988776655443322110000000009546573744576656E74"
-            + "000000000012D687FFFFFFFFFFF0BDC1000000000300FF41",
+            + "0000000E746573742D616767726567617465"
+            + "0000000D6167677265676174652D303031"
+            + "030000000B70726F76696465722D3031"
+            + "000000000012D687FFFFFFFFFFF0BDC1"
+            + "0100000003776879"
+            + "010000000772657175657374000000076162632D313233"
+            + "000000000300FF41",
             Convert.ToHexString(canonical));
         Assert.Equal(
-            "02CDD29DAEDCD9FF308F08908EC45762FF1FC0105725F8E935A7883AF890FA5F",
+            "A3490E9C641477F7869E10F8A01710F4E1F51E11F0A9BA86EA27C79F0F8FAA5B",
             hash);
         Assert.Equal(
-            "A142C4BF8F975191F476817B20B9186081B54F489EE907D0AA4FCF2D64EE5E80",
-            new Sha256HashChain().ComputeNext(hash, canonical));
+            "A2B40DB499E3559CEC0BE68F161D29ED524BCE0F5C82510D869D1D5C7D48087C",
+            chained);
     }
 
     [Fact]
@@ -269,13 +342,29 @@ public class EventBackboneTests
         var mutations = new (string Field, Func<StoredEvent, StoredEvent> Apply)[]
         {
             ("zero format", value => value with { IntegrityFormatVersion = 0 }),
+            ("legacy format", value => value with { IntegrityFormatVersion = 1 }),
             ("format", value => value with { IntegrityFormatVersion = 99 }),
             ("position", value => value with { Position = 9 }),
             ("tenant", value => value with { Tenant = new TenantId(Guid.NewGuid()) }),
             ("event ID", value => value with { EventId = Guid.NewGuid() }),
             ("event type", value => value with { EventType = "TamperedEvent" }),
+            ("aggregate", value => value with
+            {
+                AggregateReference =
+                    new EventReference("test-aggregate", "tampered"),
+            }),
+            ("actor", value => value with
+            {
+                Actor = AuditActor.System("tampered"),
+            }),
             ("occurred", value => value with { OccurredAt = value.OccurredAt.AddTicks(10) }),
             ("recorded", value => value with { RecordedAt = value.RecordedAt.AddTicks(10) }),
+            ("reason", value => value with { Reason = "tampered" }),
+            ("correlation", value => value with
+            {
+                CorrelationReference =
+                    new EventReference("request", "tampered"),
+            }),
             ("privilege", value => value with { Privilege = EventPrivilege.Privileged }),
             ("previous hash", value => value with { PreviousHash = new string('A', 64) }),
             ("hash", value => value with { Hash = new string('A', 64) }),
@@ -328,6 +417,7 @@ public class EventBackboneTests
         {
             appended = await rig.Store.AppendAsync(
                 NewEvent(),
+                Metadata(),
                 source);
         }
 
@@ -359,10 +449,14 @@ public class EventBackboneTests
         var duplicate = NewEvent();
         using (rig.Tenants.BeginScope(Tenant))
         {
-            await rig.Store.AppendAsync(duplicate, Payload("first"));
+            await rig.Store.AppendAsync(
+                duplicate,
+                Metadata(),
+                Payload("first"));
             await Assert.ThrowsAsync<EventIntegrityException>(
                 async () => await rig.Store.AppendAsync(
                     duplicate,
+                    Metadata(),
                     Payload("second")));
             Assert.Single(await rig.Store.ReadAllAsync());
         }
@@ -377,25 +471,235 @@ public class EventBackboneTests
             await Assert.ThrowsAsync<EventIntegrityException>(
                 async () => await rig.Store.AppendAsync(
                     new UndeclaredEvent(Guid.NewGuid(), FixedNow),
+                    Metadata(),
                     Payload("missing")));
             await Assert.ThrowsAsync<EventIntegrityException>(
                 async () => await rig.Store.AppendAsync(
                     new InvalidContractEvent(Guid.NewGuid(), FixedNow),
+                    Metadata(),
                     Payload("invalid")));
             await Assert.ThrowsAsync<EventIntegrityException>(
                 async () => await rig.Store.AppendAsync(
                     new UnboundedContractEvent(Guid.NewGuid(), FixedNow),
+                    Metadata(),
                     Payload("unbounded")));
             await Assert.ThrowsAsync<EventIntegrityException>(
                 async () => await rig.Store.AppendAsync(
                     new InvalidPrivilegeEvent(Guid.NewGuid(), FixedNow),
+                    Metadata(),
                     Payload("privilege")));
             await Assert.ThrowsAsync<EventIntegrityException>(
                 async () => await rig.Store.AppendAsync(
                     new TestEvent(Guid.Empty, FixedNow),
+                    Metadata(),
                     Payload("empty-id")));
             Assert.Empty(await rig.Store.ReadAllAsync());
         }
+    }
+
+    [Fact]
+    public async Task Append_requires_valid_v2_metadata_before_stream_mutation()
+    {
+        var rig = BuildRig();
+
+        Assert.Throws<ArgumentException>(
+            () => new EventAppendMetadata(
+                default,
+                AuditActor.System("platform-test")));
+        Assert.Throws<ArgumentException>(
+            () => new EventAppendMetadata(
+                new EventReference("test-aggregate", "aggregate-1"),
+                default));
+        Assert.Throws<ArgumentException>(
+            () => new EventAppendMetadata(
+                new EventReference("test-aggregate", "aggregate-1"),
+                AuditActor.System("platform-test"),
+                "\r\n"));
+        Assert.Throws<ArgumentException>(
+            () => new EventReference(
+                "test-aggregate",
+                "\uD800"));
+        Assert.Throws<ArgumentException>(
+            () => new EventReference(
+                "test-aggregate",
+                " aggregate-1 "));
+        Assert.Throws<ArgumentException>(
+            () => AuditActor.System(
+                " platform-test "));
+        Assert.DoesNotContain(
+            typeof(AuditActor).GetConstructors(),
+            constructor => constructor.GetParameters()
+                .Select(parameter => parameter.ParameterType)
+                .SequenceEqual(
+                [
+                    typeof(AuditActorKind),
+                    typeof(string),
+                ]));
+        Assert.Throws<ArgumentException>(
+            () => new AuditActor(
+                AuditActorKind.Human,
+                personKey: null,
+                workloadId: Guid.NewGuid().ToString("D")));
+        Assert.Throws<ArgumentException>(
+            () => new AuditActor(
+                AuditActorKind.Human,
+                new PersonKey(Guid.NewGuid()),
+                "raw-identity"));
+        var rawDirectoryId = Guid.NewGuid();
+        foreach (var invalidWorkloadActor in new[]
+                 {
+                     rawDirectoryId.ToString("D"),
+                     rawDirectoryId.ToString("N"),
+                     $"entra:tenant:{rawDirectoryId:D}",
+                     "person@example.com",
+                 })
+        {
+            Assert.Throws<ArgumentException>(
+                () => AuditActor.System(
+                    invalidWorkloadActor));
+            Assert.Throws<ArgumentException>(
+                () => AuditActor.Provider(
+                    invalidWorkloadActor));
+        }
+        Assert.Throws<ArgumentException>(
+            () => new EventAppendMetadata(
+                new EventReference("test-aggregate", "aggregate-1"),
+                AuditActor.System("platform-test"),
+                "\uD800"));
+        Assert.Throws<ArgumentException>(
+            () => new EventAppendMetadata(
+                new EventReference("test-aggregate", "aggregate-1"),
+                AuditActor.System("platform-test"),
+                " padded reason "));
+        Assert.Throws<ArgumentException>(
+            () => new EventAppendMetadata(
+                new EventReference("test-aggregate", "aggregate-1"),
+                AuditActor.System("platform-test"),
+                correlationReference: default(EventReference)));
+        Assert.True(
+            new EventReference(
+                "test-aggregate",
+                "valid-\U0001F680")
+                .IsValid);
+        Assert.NotNull(
+            new EventAppendMetadata(
+                new EventReference("test-aggregate", "aggregate-1"),
+                AuditActor.System("platform-test"),
+                "valid \U0001F680"));
+
+        using (rig.Tenants.BeginScope(Tenant))
+        {
+            await Assert.ThrowsAsync<ArgumentNullException>(
+                async () => await rig.Store.AppendAsync(
+                    NewEvent(),
+                    null!,
+                    Payload("missing-metadata")));
+            Assert.Empty(await rig.Store.ReadAllAsync());
+        }
+    }
+
+    [Fact]
+    public void Event_metadata_boundaries_are_exact()
+    {
+        Assert.True(
+            AuditActor.System(
+                    new string('s', 128))
+                .IsValid);
+        Assert.True(
+            AuditActor.Provider(
+                    new string('p', 128))
+                .IsValid);
+        Assert.Throws<ArgumentException>(
+            () => AuditActor.System(
+                new string('s', 129)));
+        Assert.Throws<ArgumentException>(
+            () => AuditActor.Provider(
+                new string('p', 129)));
+        Assert.True(
+            new EventReference(
+                new string('a', 64),
+                new string('v', 256))
+                .IsValid);
+        Assert.Throws<ArgumentException>(
+            () => new EventReference(
+                new string('a', 65),
+                "value"));
+        Assert.Throws<ArgumentException>(
+            () => new EventReference(
+                "reference",
+                new string('v', 257)));
+
+        Assert.Equal(
+            2048,
+            new EventAppendMetadata(
+                new EventReference("aggregate", "value"),
+                AuditActor.System("platform-test"),
+                new string('r', 2048))
+                .Reason!
+                .Length);
+        Assert.Throws<ArgumentException>(
+            () => new EventAppendMetadata(
+                new EventReference("aggregate", "value"),
+                AuditActor.System("platform-test"),
+                new string('r', 2049)));
+    }
+
+    [Fact]
+    public void Audit_actor_json_round_trips_the_typed_identity_shape()
+    {
+        var actors = new[]
+        {
+            AuditActor.Person(
+                new PersonKey(Guid.NewGuid())),
+            AuditActor.System("platform-test"),
+            AuditActor.Provider(
+                "provider:custom/surface"),
+        };
+
+        foreach (var actor in actors)
+        {
+            var json = JsonSerializer.Serialize(actor);
+            var roundTripped =
+                JsonSerializer.Deserialize<AuditActor>(
+                    json);
+
+            Assert.Equal(actor, roundTripped);
+            Assert.DoesNotContain(
+                nameof(AuditActor.OpaqueId),
+                json,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                nameof(AuditActor.IsValid),
+                json,
+                StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Canonical_envelope_rejects_invalid_v2_metadata()
+    {
+        var stored = Stored();
+        var malformed = new[]
+        {
+            stored with { AggregateReference = default },
+            stored with { Actor = default },
+            stored with { Reason = "\n" },
+            stored with { Reason = "\uD800" },
+            stored with
+            {
+                CorrelationReference = default(EventReference),
+            },
+        };
+
+        foreach (var value in malformed)
+        {
+            Assert.Throws<EventIntegrityException>(
+                () => EventEnvelopeCanonicalizer.Canonicalize(value));
+        }
+
+        Assert.NotEmpty(
+            EventEnvelopeCanonicalizer.Canonicalize(
+                stored with { Reason = "\uFFFD" }));
     }
 
     [Fact]
@@ -409,13 +713,22 @@ public class EventBackboneTests
         var otherTenant = new TenantId(Guid.NewGuid());
 
         using (rig.Tenants.BeginScope(Tenant))
-            tenantA = await rig.Store.AppendAsync(firstEvent, Payload("A"));
+        {
+            tenantA = await rig.Store.AppendAsync(
+                firstEvent,
+                Metadata(),
+                Payload("A"));
+        }
         using (rig.Tenants.BeginScope(otherTenant))
         {
-            tenantB = await rig.Store.AppendAsync(secondEvent, Payload("B"));
+            tenantB = await rig.Store.AppendAsync(
+                secondEvent,
+                Metadata(),
+                Payload("B"));
             await Assert.ThrowsAsync<EventIntegrityException>(
                 async () => await rig.Store.AppendAsync(
                     firstEvent,
+                    Metadata(),
                     Payload("duplicate")));
             Assert.Single(await rig.Store.ReadAllAsync());
         }
@@ -506,21 +819,85 @@ public class EventBackboneTests
     [Fact]
     public async Task Privileged_read_is_recorded()
     {
-        var auditor = new InMemoryPrivilegedReadAuditor();
-        await auditor.RecordAsync(new PrivilegedReadRecord(
+        var auditor = new CapturingPrivilegedReadAuditor();
+        var accessId =
+            Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var actor = AuditActor.System("platform-test");
+        var resource =
+            new EventReference("asset-usage", "asset-123");
+        var policy = PrivilegedReadPolicy.Applied(
+            new EventReference("policy-version", "policy-7"));
+        var correlation =
+            new EventReference("request", "request-1");
+        var expected = new PrivilegedReadRecord(
+            accessId,
             Tenant,
-            "person:opaque",
-            "AssetUsage",
-            "asset-123",
+            actor,
+            resource,
             "quarterly-review",
-            FixedNow));
+            policy,
+            correlation,
+            FixedNow);
 
-        Assert.Single(auditor.Records);
-        Assert.Equal("asset-123", auditor.Records[0].ResourceId);
+        await auditor.RecordAsync(expected);
+
+        var actual = Assert.Single(auditor.Records);
+        Assert.Same(expected, actual);
+        Assert.Equal(accessId, actual.AccessId);
+        Assert.Equal(Tenant, actual.Tenant);
+        Assert.Equal(actor, actual.Actor);
+        Assert.Equal(resource, actual.Resource);
+        Assert.Equal("quarterly-review", actual.Purpose);
+        Assert.Equal(policy, actual.Policy);
+        Assert.Equal(
+            new EventReference("policy-version", "policy-7"),
+            actual.Policy.Version);
+        Assert.Equal(correlation, actual.CorrelationReference);
+        Assert.Equal(FixedNow, actual.OccurredAt);
     }
 
     [Fact]
-    public void Event_store_contract_remains_append_only()
+    public async Task Raw_in_memory_privileged_auditor_fails_closed()
+    {
+        var services = new ServiceCollection();
+        services.AddInMemoryAdapters();
+        var registration = Assert.Single(
+            services,
+            descriptor =>
+                descriptor.ServiceType
+                == typeof(IPrivilegedReadAuditor));
+        Assert.Equal(
+            typeof(ControlTower.Adapters.InMemory
+                .InMemoryPrivilegedReadAuditor),
+            registration.ImplementationType);
+        var adapter =
+            new ControlTower.Adapters.InMemory
+                .InMemoryPrivilegedReadAuditor();
+        var record = new PrivilegedReadRecord(
+            Guid.NewGuid(),
+            Tenant,
+            AuditActor.System("platform-test"),
+            new EventReference("asset-usage", "asset-123"),
+            "quarterly-review",
+            PrivilegedReadPolicy.NotApplicable(),
+            new EventReference("request", "request-1"),
+            FixedNow);
+
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await adapter.RecordAsync(record));
+
+        Assert.Equal(
+            "Privileged reads require the complete C9 evidence auditor.",
+            exception.Message);
+        Assert.Empty(adapter.Records);
+
+        await adapter.StoreAsync(record);
+        Assert.Same(record, Assert.Single(adapter.Records));
+    }
+
+    [Fact]
+    public void Event_store_contract_remains_append_only_and_requires_v2_metadata()
     {
         var methods = typeof(IEventStore)
             .GetMethods()
@@ -531,6 +908,22 @@ public class EventBackboneTests
         Assert.Equal(
             new[] { nameof(IEventStore.AppendAsync), nameof(IEventStore.ReadAllAsync) },
             methods);
+
+        var append = Assert.Single(
+            typeof(IEventStore).GetMethods(),
+            method => method.Name == nameof(IEventStore.AppendAsync));
+        Assert.Equal(
+            new[]
+            {
+                typeof(IDomainEvent),
+                typeof(EventAppendMetadata),
+                typeof(ReadOnlyMemory<byte>),
+                typeof(CancellationToken),
+            },
+            append.GetParameters()
+                .Select(parameter => parameter.ParameterType)
+                .ToArray());
+        Assert.Equal(typeof(ValueTask<StoredEvent>), append.ReturnType);
     }
 
     private static Rig BuildRig(DateTimeOffset? now = null)
@@ -555,6 +948,7 @@ public class EventBackboneTests
             {
                 await rig.Store.AppendAsync(
                     NewEvent(FixedNow.AddSeconds(index)),
+                    Metadata($"aggregate-{index + 1}"),
                     Payload($"event-{index}"));
             }
             return (await rig.Store.ReadAllAsync()).ToList();
@@ -568,14 +962,26 @@ public class EventBackboneTests
             1,
             Guid.Parse("11111111-2222-3333-4444-555555555555"),
             nameof(TestEvent),
+            new EventReference("test-aggregate", "aggregate-1"),
+            AuditActor.System("platform-test"),
             occurredAt
                 ?? EventEnvelopeCanonicalizer.NormalizeTimestamp(FixedNow),
             EventEnvelopeCanonicalizer.NormalizeTimestamp(FixedNow),
+            "event-backbone-test",
+            new EventReference("request", "request-1"),
             Tenant,
             EventPrivilege.Standard,
             Sha256HashChain.Genesis,
             string.Empty,
             Payload("payload"));
+
+    private static EventAppendMetadata Metadata(
+        string aggregateValue = "aggregate-1") =>
+        new(
+            new EventReference("test-aggregate", aggregateValue),
+            AuditActor.System("platform-test"),
+            "event-backbone-test",
+            new EventReference("request", "request-1"));
 
     private static TestEvent NewEvent(DateTimeOffset? occurredAt = null) =>
         new(
@@ -655,7 +1061,7 @@ public class EventBackboneTests
         Guid EventId,
         DateTimeOffset OccurredAt) : IDomainEvent;
 
-    private sealed class InMemoryPrivilegedReadAuditor : IPrivilegedReadAuditor
+    private sealed class CapturingPrivilegedReadAuditor : IPrivilegedReadAuditor
     {
         public List<PrivilegedReadRecord> Records { get; } = [];
 

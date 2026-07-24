@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ControlTower.Modules.Ledger.Domain;
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 
 namespace ControlTower.Modules.Ledger.Application;
@@ -18,48 +19,125 @@ public sealed class AssetRegistrationService(
     ITenantContextAccessor tenants,
     TaxonomyScheme taxonomy)
 {
-    public async Task<LedgerAssetId> DiscoverAsync(string displayName, AssetType type, CancellationToken ct = default)
+    public async Task<LedgerAssetId> DiscoverAsync(
+        string displayName,
+        AssetType type,
+        AuditActor actor,
+        EventReference? correlation = null,
+        CancellationToken ct = default)
     {
         Require(LedgerCapability.TriageAssets);
+        RequireActor(actor);
         var asset = AIAsset.Discover(tenants.Current, displayName, type, taxonomy);
-        await PersistAsync(asset, ct);
+        ValidateContext(
+            asset.Id,
+            actor,
+            correlation);
+        await PersistAsync(asset, actor, correlation, ct);
         return asset.Id;
     }
 
-    public async Task TriageAsync(LedgerAssetId id, CancellationToken ct = default)
+    public async Task TriageAsync(
+        LedgerAssetId id,
+        AuditActor actor,
+        EventReference? correlation = null,
+        CancellationToken ct = default)
     {
         Require(LedgerCapability.TriageAssets);
+        RequireActor(actor);
+        ValidateContext(
+            id,
+            actor,
+            correlation);
         var asset = await LoadAsync(id, ct);
         asset.Triage();
-        await PersistAsync(asset, ct);
+        await PersistAsync(asset, actor, correlation, ct);
     }
 
-    public async Task RegisterAsync(LedgerAssetId id, string businessPurpose, PersonRef owner, CancellationToken ct = default)
+    public async Task RegisterAsync(
+        LedgerAssetId id,
+        string businessPurpose,
+        PersonRef owner,
+        AuditActor actor,
+        EventReference? correlation = null,
+        CancellationToken ct = default)
     {
         Require(LedgerCapability.RegisterAssets);
+        RequireActor(actor);
+        ValidateContext(
+            id,
+            actor,
+            correlation);
         var asset = await LoadAsync(id, ct);
         asset.Register(businessPurpose, owner);
-        await PersistAsync(asset, ct);
+        await PersistAsync(asset, actor, correlation, ct);
     }
 
-    public async Task RetireAsync(LedgerAssetId id, CancellationToken ct = default)
+    public async Task RetireAsync(
+        LedgerAssetId id,
+        AuditActor actor,
+        EventReference? correlation = null,
+        CancellationToken ct = default)
     {
         Require(LedgerCapability.RetireAssets);
+        RequireActor(actor);
+        ValidateContext(
+            id,
+            actor,
+            correlation);
         var asset = await LoadAsync(id, ct);
         asset.Retire();
-        await PersistAsync(asset, ct);
+        await PersistAsync(asset, actor, correlation, ct);
     }
 
     private async Task<AIAsset> LoadAsync(LedgerAssetId id, CancellationToken ct) =>
         await repository.GetAsync(id, ct) ?? throw new DomainException($"Asset {id} not found in this tenant.");
 
-    private async Task PersistAsync(AIAsset asset, CancellationToken ct)
+    private async Task PersistAsync(
+        AIAsset asset,
+        AuditActor actor,
+        EventReference? correlation,
+        CancellationToken ct)
     {
+        var prepared = asset
+            .DequeueEvents()
+            .Select(domainEvent =>
+            {
+                var payload =
+                    JsonSerializer.SerializeToUtf8Bytes(
+                        domainEvent,
+                        domainEvent.GetType());
+                try
+                {
+                    return new PreparedEvent(
+                        domainEvent,
+                        new EventAppendMetadata(
+                            EventReference.For(
+                                "ai-asset",
+                                domainEvent.AssetId.Value),
+                            actor,
+                            domainEvent is AssetRejected rejected
+                                ? rejected.Reason
+                                : null,
+                            correlation),
+                        payload);
+                }
+                catch (ArgumentException)
+                {
+                    throw new DomainException(
+                        "The asset evidence context is invalid.");
+                }
+            })
+            .ToList();
+
         await repository.SaveAsync(asset, ct);
-        foreach (var domainEvent in asset.DequeueEvents())
+        foreach (var pending in prepared)
         {
-            var payload = JsonSerializer.SerializeToUtf8Bytes(domainEvent, domainEvent.GetType());
-            await events.AppendAsync(domainEvent, payload, ct);
+            await events.AppendAsync(
+                pending.Event,
+                pending.Metadata,
+                pending.Payload,
+                ct);
         }
 
         await readModel.ProjectAsync(asset, ct);
@@ -70,4 +148,37 @@ public sealed class AssetRegistrationService(
         if (!authorizer.IsAllowed(capability))
             throw new UnauthorizedAccessException($"Missing capability: {capability}.");
     }
+
+    private static void RequireActor(AuditActor actor)
+    {
+        if (!actor.IsValid)
+            throw new DomainException("An audit actor is required.");
+    }
+
+    private static void ValidateContext(
+        LedgerAssetId id,
+        AuditActor actor,
+        EventReference? correlation)
+    {
+        try
+        {
+            _ = new EventAppendMetadata(
+                EventReference.For(
+                    "ai-asset",
+                    id.Value),
+                actor,
+                reason: null,
+                correlation);
+        }
+        catch (ArgumentException)
+        {
+            throw new DomainException(
+                "The asset evidence context is invalid.");
+        }
+    }
+
+    private sealed record PreparedEvent(
+        LedgerEvent Event,
+        EventAppendMetadata Metadata,
+        byte[] Payload);
 }

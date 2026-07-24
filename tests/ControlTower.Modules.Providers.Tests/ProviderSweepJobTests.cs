@@ -3,6 +3,7 @@ using ControlTower.Adapters.InMemory;
 using ControlTower.Modules.Providers.Application;
 using ControlTower.Modules.Providers.Domain;
 using ControlTower.Modules.Providers.Infrastructure;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 using Xunit;
 
@@ -10,6 +11,9 @@ namespace ControlTower.Modules.Providers.Tests;
 
 public class ProviderSweepJobTests
 {
+    private static readonly AuditActor RequestActor =
+        AuditActor.System("provider-test");
+
     private sealed record Rig(
         TenantContextAccessor Tenants,
         IProviderConnectionStore Connections,
@@ -60,7 +64,10 @@ public class ProviderSweepJobTests
         using var _ = r.Tenants.BeginScope(tenant);
         await r.Connections.SaveAsync(Connection(tenant));
 
-        var jobId = await r.Requests.RequestAsync("conn-1", ProviderCapability.Inventory);
+        var jobId = await r.Requests.RequestAsync(
+            "conn-1",
+            ProviderCapability.Inventory,
+            RequestActor);
         var requestedEvent = Assert.Single(await r.Events.ReadAllAsync());
         Assert.Equal(jobId, requestedEvent.EventId);
         Assert.NotEqual(requestedEvent.PreviousHash, requestedEvent.Hash);
@@ -85,7 +92,10 @@ public class ProviderSweepJobTests
         var tenant = new TenantId(Guid.NewGuid());
         using var _ = r.Tenants.BeginScope(tenant);
         await r.Connections.SaveAsync(Connection(tenant));
-        await r.Requests.RequestAsync("conn-1", ProviderCapability.Inventory);
+        await r.Requests.RequestAsync(
+            "conn-1",
+            ProviderCapability.Inventory,
+            RequestActor);
         var job = Assert.Single(await r.Outbox.DequeueBatchAsync(100));
 
         await Assert.ThrowsAsync<ProviderException>(() => r.Handler.HandleAsync(job.Payload));
@@ -101,6 +111,9 @@ public class ProviderSweepJobTests
         using (r.Tenants.BeginScope(tenantA)) await r.Connections.SaveAsync(Connection(tenantA));
         using (r.Tenants.BeginScope(tenantB))
             await Assert.ThrowsAsync<ProviderException>(() =>
-                r.Requests.RequestAsync("conn-1", ProviderCapability.Inventory));
+                r.Requests.RequestAsync(
+                    "conn-1",
+                    ProviderCapability.Inventory,
+                    RequestActor));
     }
 }

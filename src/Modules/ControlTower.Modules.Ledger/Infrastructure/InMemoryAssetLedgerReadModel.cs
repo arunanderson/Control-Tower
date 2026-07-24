@@ -13,7 +13,11 @@ public sealed class InMemoryAssetLedgerReadModel(ITenantContextAccessor tenants)
     public Task ProjectAsync(AIAsset asset, CancellationToken ct = default)
     {
         var tenant = tenants.Current;
-        var owner = asset.Ownerships.FirstOrDefault(o => o.IsCurrent && o.Role == OwnershipRole.Owner)?.Person.DisplayName;
+        // Display identity lives only behind E19 and cannot enter this general L1 read model.
+        var hasOwner = asset.Ownerships.Any(
+            assignment =>
+                assignment.IsCurrent
+                && assignment.Role == OwnershipRole.Owner);
         var view = new AssetLedgerView
         {
             AssetId = asset.Id.Value,
@@ -23,7 +27,7 @@ public sealed class InMemoryAssetLedgerReadModel(ITenantContextAccessor tenants)
             OperationalLifecycleState = asset.OperationalLifecycleState.ToString(),
             MatchConfidence = asset.MatchConfidence.ToString(),
             IsOwnerless = asset.IsOwnerless,
-            OwnerDisplayName = owner,
+            OwnerDisplayName = hasOwner ? "Assigned" : null,
             BusinessPurpose = asset.BusinessPurpose,
             ResolutionLinkCount = asset.ActiveResolutionLinks.Count, // honest: severed/superseded links don't count
         };

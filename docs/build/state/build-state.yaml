@@ -8,8 +8,8 @@ project:
   production_target: Azure # DEV-001: dev-only substitutes allowed, no prod dependency
 current_phase: PHASE-1 # return to the production foundation critical path; later domain slices exist in development form
 current_epic: EPIC-1-2 # production security, privacy and durable-data foundation
-current_task: P1-T05 # canonical event envelope and integrity verifier
-status: in_progress # event integrity v1 is green; complete E20 and durable production foundations remain
+current_task: P1-T06 # complete E20 and C8 E18/E19 contracts
+status: in_progress # E20 and C8 semantic contracts are green; durable production foundations remain
 merge_policy: merge-trains # Arun 2026-07-17: agent merges tenant-independent green PRs w/ Merge Readiness Report
 emergent_first: true # new features implemented within existing contexts unless a hard gate is hit
 product_outcome:
@@ -110,6 +110,11 @@ tasks:
   - {
       id: P1-T05,
       title: "Canonical event envelope and integrity verifier",
+      status: complete,
+    }
+  - {
+      id: P1-T06,
+      title: "Complete E20 audit metadata and C8 E18/E19 contracts",
       status: complete,
     }
   - {
@@ -239,11 +244,11 @@ merged_prs:
   - { number: 25, title: Canonical event envelope and integrity verifier }
 open_prs: []
 next_trains:
-  - "Production foundation: complete E20 and C8 identity/authorization semantics (P1-T06), then durable event/E18/E19 PostgreSQL foundations (P1-T07/P1-T08)."
+  - "Production foundation: persist the frozen E20 event kernel (P1-T07), then durable E18/E19 PostgreSQL foundations (P1-T08)."
   - "Privacy foundation: C8/C5 telemetry policy, privacy Gate 2, adversarial tenant-isolation tests and policy-as-of Gate 1."
   - "Durable truth: Azure PostgreSQL/RLS, transactional event/outbox persistence, tenant watermarks/receipts, Service Bus, Key Vault and Blob/WORM adapters."
   - "Enterprise acquisition through C4: Microsoft/Purview/Defender, identity/network/SaaS/cloud/API providers, then tenant-bound browser and endpoint collectors under DEV-002."
   - "P5-T04 retention mechanism remains behind an authoritative versioned Legal-owned jurisdiction-policy provider; production policy values are a human gate."
   - "P0-T16 rerun requires representative agent archetypes and an Agent 365 licence; current sandbox findings are informative but inconclusive."
-test_summary: "189 backend tests green (Platform 25, Ledger 27, Governance 17, Economics 20, Providers 24, Architecture 9, Host.Web 67) + 114 SPA tests (13 vitest files); 0 vulnerable production packages"
-last_updated_by: P1-T05
+test_summary: "224 backend tests green (Platform 31, Ledger 31, Governance 19, Economics 23, Providers 29, Architecture 12, Host.Web 79) + 114 SPA tests (13 vitest files); 0 vulnerable production packages"
+last_updated_by: P1-T06

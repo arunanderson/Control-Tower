@@ -1,4 +1,5 @@
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 
 namespace ControlTower.Modules.Economics.Domain;
 
@@ -43,7 +44,7 @@ public sealed record ReportingPeriodFrozen : EconomicsEvent
     public required Guid SnapshotId { get; init; }
     public required int Version { get; init; }
     public required string InputBasisHash { get; init; }
-    public required string SignedBy { get; init; }
+    public required AuditActor SignedBy { get; init; }
 }
 
 [DomainEventContract("ReportingPeriodRestated", EventPrivilege.Standard)]
@@ -54,6 +55,6 @@ public sealed record ReportingPeriodRestated : EconomicsEvent
     public required int Version { get; init; }
     public required Guid SupersedesSnapshotId { get; init; }
     public required string InputBasisHash { get; init; }
-    public required string SignedBy { get; init; }
+    public required AuditActor SignedBy { get; init; }
     public required string Reason { get; init; }
 }

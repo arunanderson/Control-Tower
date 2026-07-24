@@ -11,7 +11,11 @@ public interface IEventStore
     /// Appends an event with its canonical payload and returns the stored, chained record. Opaque
     /// event IDs are globally unique; duplicate appends fail before mutation.
     /// </summary>
-    ValueTask<StoredEvent> AppendAsync(IDomainEvent @event, ReadOnlyMemory<byte> payload, CancellationToken ct = default);
+    ValueTask<StoredEvent> AppendAsync(
+        IDomainEvent @event,
+        EventAppendMetadata metadata,
+        ReadOnlyMemory<byte> payload,
+        CancellationToken ct = default);
 
     /// <summary>Reads the full stream in order (for projection rebuilds and integrity verification).</summary>
     ValueTask<IReadOnlyList<StoredEvent>> ReadAllAsync(CancellationToken ct = default);

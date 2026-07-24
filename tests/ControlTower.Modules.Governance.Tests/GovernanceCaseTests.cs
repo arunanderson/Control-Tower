@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using ControlTower.Modules.Governance.Domain;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 using Xunit;
 
@@ -9,7 +10,10 @@ namespace ControlTower.Modules.Governance.Tests;
 public class GovernanceCaseTests
 {
     private static readonly TenantId Tenant = new(Guid.NewGuid());
-    private static readonly ActorRef Gov = new("gov-1", "Governance Lead");
+    private static readonly AuditActor Gov =
+        AuditActor.System("governance-lead");
+    private static AuditActor Actor(string id) =>
+        AuditActor.System(id);
 
     private static GovernanceCase Open(RiskTier tier, CaseType type = CaseType.Approval, DateTimeOffset? now = null) =>
         GovernanceCase.Open(Tenant, Guid.NewGuid(), type, tier, now ?? DateTimeOffset.UtcNow);
@@ -38,9 +42,9 @@ public class GovernanceCaseTests
         var now = DateTimeOffset.UtcNow;
         var c = Open(RiskTier.High);
         c.RecordDecision(ReviewerRole.Governance, Gov, true, "ok", null, now);
-        c.RecordDecision(ReviewerRole.Security, new("sec", "Sec"), true, "ok", null, now);
+        c.RecordDecision(ReviewerRole.Security, Actor("security"), true, "ok", null, now);
         Assert.Equal(CaseStatus.AwaitingReview, c.Status);
-        c.RecordDecision(ReviewerRole.Business, new("biz", "Biz"), true, "ok", null, now);
+        c.RecordDecision(ReviewerRole.Business, Actor("business"), true, "ok", null, now);
         Assert.Equal(CaseStatus.Approved, c.Status);
     }
 
@@ -48,7 +52,7 @@ public class GovernanceCaseTests
     public void A_single_rejection_rejects_the_case()
     {
         var c = Open(RiskTier.High);
-        c.RecordDecision(ReviewerRole.Security, new("sec", "Sec"), false, "unacceptable risk", null, DateTimeOffset.UtcNow);
+        c.RecordDecision(ReviewerRole.Security, Actor("security"), false, "unacceptable risk", null, DateTimeOffset.UtcNow);
         Assert.Equal(CaseStatus.Rejected, c.Status);
     }
 
@@ -57,7 +61,7 @@ public class GovernanceCaseTests
     {
         var c = Open(RiskTier.Medium);
         Assert.Throws<GovernanceException>(() =>
-            c.RecordDecision(ReviewerRole.Finance, new("f", "F"), true, "x", null, DateTimeOffset.UtcNow));
+            c.RecordDecision(ReviewerRole.Finance, Actor("finance"), true, "x", null, DateTimeOffset.UtcNow));
     }
 
     [Fact]

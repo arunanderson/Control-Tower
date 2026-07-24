@@ -1,4 +1,5 @@
 using ControlTower.Platform.Tenancy;
+using ControlTower.Platform.Identity;
 
 namespace ControlTower.Modules.Ledger.Domain;
 
@@ -40,14 +41,15 @@ public sealed class MergeCase
     public DateTimeOffset OpenedAt { get; }
     public DateTimeOffset? ResolvedAt { get; private set; }
     public string? Outcome { get; private set; }
-    public string? ResolvedBy { get; private set; }
+    public AuditActor? ResolvedBy { get; private set; }
 
     public static MergeCase Open(TenantId tenant, string reason, MatchConfidence confidence, NativeIdentifierSet identifiers, IReadOnlyList<LedgerAssetId> candidates, Guid? observationRef) =>
         new(Guid.NewGuid(), tenant, reason, confidence, identifiers, candidates, observationRef);
 
-    public void Resolve(string outcome, string by)
+    public void Resolve(string outcome, AuditActor by)
     {
         if (Status == MergeCaseStatus.Resolved) throw new DomainException("Merge case already resolved.");
+        if (!by.IsValid) throw new DomainException("A merge-case decision actor is required.");
         Status = MergeCaseStatus.Resolved;
         Outcome = outcome;
         ResolvedBy = by;

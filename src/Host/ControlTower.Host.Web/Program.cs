@@ -8,7 +8,10 @@ using ControlTower.Modules.Governance;
 using ControlTower.Modules.Ledger;
 using ControlTower.Modules.Providers;
 using ControlTower.Modules.Trust.Authorization;
+using ControlTower.Platform.Audit;
 using ControlTower.Platform.DependencyInjection;
+using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -52,12 +55,20 @@ app.MapGet("/whoami", async (
         var human = AuthenticatedHumanContext.Require(http);
         var access = await accessResolver.ResolveAsync(
             human.ObjectId,
+            new PersonKeyAccessContext(
+                AuditActor.System("host-authorization"),
+                "resolve effective access",
+                new EventReference(
+                    "http-request",
+                    http.TraceIdentifier),
+                PrivilegedReadPolicy.NotApplicable()),
             http.RequestAborted);
         return Results.Ok(new
         {
             tenant = tenants.Current.ToString(),
-            directoryTenant = human.DirectoryTenantId,
-            actor = human.CanonicalActor,
+            actor = access.SubjectPersonKey is { } personKey
+                ? AuditActor.Person(personKey).ToString()
+                : null,
             roles = access.Roles.Select(
                 ControlTowerAccessCatalog.Name),
             capabilities = access.Capabilities

@@ -10,10 +10,7 @@ namespace ControlTower.Host.Web.Authentication;
 public sealed record AuthenticatedHuman(
     Guid DirectoryTenantId,
     Guid ObjectId,
-    string Subject)
-{
-    public string CanonicalActor => $"entra:{DirectoryTenantId:D}:{ObjectId:D}";
-}
+    string Subject);
 
 public static class AuthenticatedHumanContext
 {

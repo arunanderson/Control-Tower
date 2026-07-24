@@ -6,6 +6,8 @@ using ControlTower.Adapters.InMemory;
 using ControlTower.Modules.Economics.Application;
 using ControlTower.Modules.Economics.Domain;
 using ControlTower.Modules.Economics.Infrastructure;
+using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 using Xunit;
 
@@ -13,20 +15,36 @@ namespace ControlTower.Modules.Economics.Tests;
 
 public class EconomicsProjectionTests
 {
+    private static AuditActor Actor(string id) =>
+        AuditActor.System(id);
+
     private static EconomicFigure Cost(decimal amount) =>
         new(new Money(amount, "EUR"), new Evidence("Azure Cost Management", EvidenceClass.Measured, "billing meter", DateTimeOffset.UtcNow, ValidationState.SystemObserved));
 
     private static EconomicFigure Value(decimal amount, EvidenceClass evidenceClass, ValidationState state) =>
         new(new Money(amount, "EUR"), new Evidence("declarer", evidenceClass, "value methodology", DateTimeOffset.UtcNow, state));
 
-    private sealed record Rig(EconomicsIngestionService Ingest, EconomicsProjectionService Project, IEconomicsStore Store, TenantContextAccessor Accessor);
+    private sealed record Rig(
+        EconomicsIngestionService Ingest,
+        EconomicsProjectionService Project,
+        IEconomicsStore Store,
+        IEventStore Events,
+        TenantContextAccessor Accessor);
 
     private static Rig Build()
     {
         var accessor = new TenantContextAccessor();
         var store = new InMemoryEconomicsStore(accessor);
         var events = new InMemoryEventStore(accessor);
-        return new Rig(new EconomicsIngestionService(store, events, accessor), new EconomicsProjectionService(store), store, accessor);
+        return new Rig(
+            new EconomicsIngestionService(
+                store,
+                events,
+                accessor),
+            new EconomicsProjectionService(store),
+            store,
+            events,
+            accessor);
     }
 
     private static async Task SeedAsync(Rig r)
@@ -37,11 +55,11 @@ public class EconomicsProjectionTests
         var agent2 = Guid.NewGuid();
         var flow = Guid.NewGuid();
 
-        await r.Ingest.IngestCostAsync(agent1, "agent", Cost(100m), start, end, "Sales", "Commercial");
-        await r.Ingest.DeclareValueAsync(agent1, "agent", BenefitType.CostAvoided, Value(300m, EvidenceClass.FinanciallyValidated, ValidationState.FinanceVerified), "finance");
-        await r.Ingest.IngestCostAsync(agent2, "agent", Cost(200m), start, end, "Engineering", "Tech");
-        await r.Ingest.DeclareValueAsync(agent2, "agent", BenefitType.TimeSaved, Value(100m, EvidenceClass.SelfReported, ValidationState.Estimated), "owner");
-        await r.Ingest.IngestCostAsync(flow, "flow", Cost(50m), start, end); // untagged → Unattributed
+        await r.Ingest.IngestCostAsync(agent1, "agent", Cost(100m), start, end, Actor("cost-ingestion"), "Sales", "Commercial");
+        await r.Ingest.DeclareValueAsync(agent1, "agent", BenefitType.CostAvoided, Value(300m, EvidenceClass.FinanciallyValidated, ValidationState.FinanceVerified), Actor("finance"));
+        await r.Ingest.IngestCostAsync(agent2, "agent", Cost(200m), start, end, Actor("cost-ingestion"), "Engineering", "Tech");
+        await r.Ingest.DeclareValueAsync(agent2, "agent", BenefitType.TimeSaved, Value(100m, EvidenceClass.SelfReported, ValidationState.Estimated), Actor("owner"));
+        await r.Ingest.IngestCostAsync(flow, "flow", Cost(50m), start, end, Actor("cost-ingestion")); // untagged → Unattributed
     }
 
     [Fact]
@@ -158,12 +176,12 @@ public class EconomicsProjectionTests
         var assetId = Guid.NewGuid();
 
         var declId = await r.Ingest.DeclareValueAsync(assetId, "agent", BenefitType.CostAvoided,
-            Value(300m, EvidenceClass.SelfReported, ValidationState.Estimated), "owner");
+            Value(300m, EvidenceClass.SelfReported, ValidationState.Estimated), Actor("owner"));
 
         await r.Ingest.ValidateValueAsync(declId,
-            Value(300m, EvidenceClass.Measured, ValidationState.BusinessValidated), "reviewed with owner", "coe");
+            Value(300m, EvidenceClass.Measured, ValidationState.BusinessValidated), "reviewed with owner", Actor("coe"));
         await r.Ingest.ValidateValueAsync(declId,
-            Value(280m, EvidenceClass.FinanciallyValidated, ValidationState.FinanceVerified), "GL reconciled", "finance");
+            Value(280m, EvidenceClass.FinanciallyValidated, ValidationState.FinanceVerified), "GL reconciled", Actor("finance"));
 
         var declaration = await r.Store.GetDeclarationAsync(declId);
         Assert.NotNull(declaration);
@@ -172,6 +190,83 @@ public class EconomicsProjectionTests
 
         // Moving backward is rejected.
         await Assert.ThrowsAsync<EconomicsException>(() =>
-            r.Ingest.ValidateValueAsync(declId, Value(280m, EvidenceClass.SelfReported, ValidationState.Estimated), "oops", "someone"));
+            r.Ingest.ValidateValueAsync(declId, Value(280m, EvidenceClass.SelfReported, ValidationState.Estimated), "oops", Actor("someone")));
+    }
+
+    [Fact]
+    public async Task Invalid_economics_evidence_fails_before_store_mutation()
+    {
+        var r = Build();
+        using var _ = r.Accessor.BeginScope(
+            new TenantId(Guid.NewGuid()));
+        var now = DateTimeOffset.UtcNow;
+
+        await Assert.ThrowsAsync<EconomicsException>(
+            () => r.Ingest.IngestCostAsync(
+                Guid.Empty,
+                "agent",
+                Cost(100m),
+                now.AddDays(-1),
+                now,
+                Actor("cost-ingestion")));
+        await Assert.ThrowsAsync<EconomicsException>(
+            () => r.Ingest.DeclareValueAsync(
+                Guid.Empty,
+                "agent",
+                BenefitType.CostAvoided,
+                Value(
+                    300m,
+                    EvidenceClass.SelfReported,
+                    ValidationState.Estimated),
+                Actor("owner")));
+
+        Assert.Empty(await r.Store.CostsAsync());
+        Assert.Empty(await r.Store.DeclarationsAsync());
+        Assert.Empty(await r.Events.ReadAllAsync());
+
+        var assetId = Guid.NewGuid();
+        var declarationId =
+            await r.Ingest.DeclareValueAsync(
+                assetId,
+                "agent",
+                BenefitType.CostAvoided,
+                Value(
+                    300m,
+                    EvidenceClass.SelfReported,
+                    ValidationState.Estimated),
+                Actor("owner"));
+        var baselineEventCount =
+            (await r.Events.ReadAllAsync()).Count;
+
+        foreach (var invalidReason in new[]
+                 {
+                     " padded reason ",
+                     new string('x', 2049),
+                     "invalid\u0001reason",
+                     "invalid\uD800reason",
+                 })
+        {
+            await Assert.ThrowsAsync<EconomicsException>(
+                () => r.Ingest.ValidateValueAsync(
+                    declarationId,
+                    Value(
+                        300m,
+                        EvidenceClass.Measured,
+                        ValidationState.BusinessValidated),
+                    invalidReason,
+                    Actor("finance")));
+
+            var declaration =
+                await r.Store.GetDeclarationAsync(
+                    declarationId);
+            Assert.NotNull(declaration);
+            Assert.Equal(
+                ValidationState.Estimated,
+                declaration!.State);
+            Assert.Single(declaration.Revisions);
+            Assert.Equal(
+                baselineEventCount,
+                (await r.Events.ReadAllAsync()).Count);
+        }
     }
 }

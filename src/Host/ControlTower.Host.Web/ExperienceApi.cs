@@ -8,6 +8,7 @@ using ControlTower.Modules.Providers.Application;
 using ControlTower.Host.Web.Authentication;
 using ControlTower.Host.Web.Authorization;
 using ControlTower.Modules.Trust.Authorization;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -81,11 +82,18 @@ public static class ExperienceApi
                 Results.Ok((await audit.ListAsync()).Select(x => new
                 {
                     x.AccessId,
-                    x.Record.Actor,
+                    actor = x.Record.Actor.ToString(),
                     x.Record.Purpose,
                     resource = x.Record.ResourceId,
                     x.Record.OccurredAt,
-                    x.CorrelationId,
+                    policyApplicable =
+                        x.Record.Policy.Kind
+                        == ControlTower.Platform.Audit
+                            .PrivilegedReadPolicyKind.Applied,
+                    policyVersion =
+                        x.Record.Policy.Version?.ToString(),
+                    correlationId =
+                        x.Record.CorrelationReference.ToString(),
                 })))
             .RequireControlTowerCapability(
                 ControlTowerCapability.PrivilegedAccessRead)
@@ -237,14 +245,22 @@ public static class ExperienceApi
                 ControlTowerCapability.ResolutionManage);
     }
 
-    private static string Operator(HttpContext http) =>
-        AuthenticatedHumanContext.Require(http).CanonicalActor;
+    private static AuditActor Operator(HttpContext http)
+    {
+        var human = AuthenticatedHumanContext.Require(http);
+        var tenants = http.RequestServices
+            .GetRequiredService<ITenantContextAccessor>();
+        return http.RequestServices
+            .GetRequiredService<CurrentEffectiveAccess>()
+            .RequireActor(tenants.Current, human.ObjectId);
+    }
 
-    private static string RequiredOperator(HttpContext http) =>
-        AuthenticatedHumanContext.Require(http).CanonicalActor;
+    private static AuditActor RequiredOperator(HttpContext http) =>
+        Operator(http);
 
-    private static string RequiredLegalHoldOperator(HttpContext http) =>
-        AuthenticatedHumanContext.Require(http).CanonicalActor;
+    private static AuditActor RequiredLegalHoldOperator(
+        HttpContext http) =>
+        Operator(http);
 
     private static string RequiredApprovalReference(HttpContext http) =>
         RequestBusinessContext.TryGetApprovalReference(http, out var approval)

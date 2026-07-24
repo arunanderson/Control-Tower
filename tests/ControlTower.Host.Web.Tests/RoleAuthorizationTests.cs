@@ -4,13 +4,16 @@ using System.Reflection;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using ControlTower.Adapters.InMemory;
 using ControlTower.Host.Web.Authorization;
 using ControlTower.Host.Web.Authentication;
 using ControlTower.Modules.Audit;
 using ControlTower.Modules.Ledger.Application;
 using ControlTower.Modules.Trust.Authorization;
 using ControlTower.Modules.Trust.Infrastructure;
+using ControlTower.Platform.Audit;
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authorization;
@@ -185,7 +188,7 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
             () => service.AssignAsync(
                 Guid.NewGuid(),
                 (ControlTowerRole)999,
-                RoleAssignmentActor.System("test")));
+                AuditActor.System("test")));
         Assert.Throws<ArgumentOutOfRangeException>(
             () => ControlTowerAccessCatalog.Name((ControlTowerRole)999));
     }
@@ -403,22 +406,47 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         var tenantB = new TenantId(Guid.NewGuid());
         var objectId = Guid.NewGuid();
         var tenants = new TenantContextAccessor();
-        var map = new InMemoryPersonKeyMap(tenants);
+        var events = new InMemoryEventStore(tenants);
+        var sink = new InMemoryPrivilegedReadAuditor();
+        var auditor = new PrivilegedReadEvidenceAuditor(
+            sink,
+            new InMemoryPrivilegedAccessProjection(tenants),
+            events,
+            tenants);
+        var map = new InMemoryPersonKeyMap(
+            tenants,
+            auditor,
+            events,
+            TimeProvider.System);
         PersonKey keyA;
 
         using (tenants.BeginScope(tenantA))
-            keyA = await map.GetOrCreateAsync(objectId);
+            keyA = (await map.GetOrCreateAsync(
+                new DirectoryIdentitySnapshot(objectId),
+                PersonKeyAccess("create tenant A mapping"))).PersonKey;
 
         using (tenants.BeginScope(tenantB))
         {
-            Assert.Null(await map.FindAsync(objectId));
-            var keyB = await map.GetOrCreateAsync(objectId);
+            Assert.Null(await map.FindAsync(
+                objectId,
+                PersonKeyAccess("find tenant B mapping")));
+            var keyB = (await map.GetOrCreateAsync(
+                new DirectoryIdentitySnapshot(objectId),
+                PersonKeyAccess("create tenant B mapping"))).PersonKey;
             Assert.NotEqual(keyA, keyB);
-            Assert.Equal(keyB, await map.FindAsync(objectId));
+            Assert.Equal(
+                keyB,
+                await map.FindAsync(
+                    objectId,
+                    PersonKeyAccess("verify tenant B mapping")));
         }
 
         using (tenants.BeginScope(tenantA))
-            Assert.Equal(keyA, await map.FindAsync(objectId));
+            Assert.Equal(
+                keyA,
+                await map.FindAsync(
+                    objectId,
+                    PersonKeyAccess("verify tenant A mapping")));
     }
 
     [Fact]
@@ -429,7 +457,7 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         var requestedObjectId = Guid.NewGuid();
         var requestedPersonKey = new PersonKey(Guid.NewGuid());
         var otherPersonKey = new PersonKey(Guid.NewGuid());
-        var system = RoleAssignmentActor.System("test");
+        var system = AuditActor.System("test");
         var assignments = new StaticRoleAssignmentReader(
             new RoleAssignment(
                 Guid.NewGuid(),
@@ -459,11 +487,70 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
             assignments,
             tenants);
 
-        var access = await resolver.ResolveAsync(requestedObjectId);
+        var access = await resolver.ResolveAsync(
+            requestedObjectId,
+            PersonKeyAccess("resolve effective access"));
 
+        Assert.Equal(requestedPersonKey, access.SubjectPersonKey);
         Assert.Equal([ControlTowerRole.Viewer], access.Roles);
         Assert.True(access.Allows(ControlTowerCapability.PortfolioRead));
         Assert.False(access.Allows(ControlTowerCapability.AdministrationRead));
+    }
+
+    [Fact]
+    public async Task Capability_handler_resolves_effective_access_once_per_request()
+    {
+        var tenant = new TenantId(Guid.NewGuid());
+        var objectId = Guid.NewGuid();
+        var personKey = PersonKey.New();
+        var tenants = new TenantContextAccessor();
+        using var _ = tenants.BeginScope(tenant);
+        var resolver = new CountingEffectiveAccessResolver(
+            ControlTowerAccessCatalog.Resolve(
+                personKey,
+                [ControlTowerRole.Viewer]));
+        var current = new CurrentEffectiveAccess();
+        var handler = new ControlTowerCapabilityHandler(
+            resolver,
+            tenants,
+            current);
+        var http = new DefaultHttpContext();
+        var setHuman = typeof(AuthenticatedHumanContext)
+            .GetMethod(
+                "Set",
+                BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(setHuman);
+        setHuman.Invoke(
+            null,
+            [
+                http,
+                new AuthenticatedHuman(
+                    Guid.NewGuid(),
+                    objectId,
+                    "subject"),
+            ]);
+
+        foreach (var capability in new[]
+                 {
+                     ControlTowerCapability.PortfolioRead,
+                     ControlTowerCapability.EconomicsExecutiveRead,
+                 })
+        {
+            var requirement =
+                new ControlTowerCapabilityRequirement(capability);
+            var authorization = new AuthorizationHandlerContext(
+                [requirement],
+                new ClaimsPrincipal(
+                    new ClaimsIdentity("test")),
+                http);
+
+            await handler.HandleAsync(authorization);
+
+            Assert.True(authorization.HasSucceeded);
+        }
+
+        Assert.Equal(1, resolver.ResolveCount);
+        Assert.Equal(personKey, current.SubjectPersonKey);
     }
 
     [Fact]
@@ -478,31 +565,35 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
             reader,
             tenants);
 
-        var access = await resolver.ResolveAsync(Guid.NewGuid());
+        var access = await resolver.ResolveAsync(
+            Guid.NewGuid(),
+            PersonKeyAccess("resolve invalid person key"));
 
+        Assert.Null(access.SubjectPersonKey);
         Assert.Empty(access.Roles);
         Assert.Empty(access.Capabilities);
-        Assert.Throws<RoleAssignmentException>(
-            () => RoleAssignmentActor.Person(default));
+        Assert.Throws<ArgumentException>(
+            () => AuditActor.Person(default));
         Assert.Throws<RoleAssignmentException>(
             () => new RoleAssignment(
                 Guid.NewGuid(),
                 tenant,
                 default,
                 ControlTowerRole.Viewer,
-                RoleAssignmentActor.System("test"),
+                AuditActor.System("test"),
                 DateTimeOffset.UtcNow));
 
         var store = new LeakyRoleAssignmentStore(null, []);
         var service = new RoleAssignmentService(
             new StaticPersonKeyMap(default),
             store,
-            tenants);
+            tenants,
+            TimeProvider.System);
         await Assert.ThrowsAsync<RoleAssignmentException>(
             () => service.AssignAsync(
                 Guid.NewGuid(),
                 ControlTowerRole.Viewer,
-                RoleAssignmentActor.System("test")));
+                AuditActor.System("test")));
         Assert.Null(store.Committed);
     }
 
@@ -517,14 +608,14 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
             tenantB,
             subjectKey,
             ControlTowerRole.Administrator,
-            RoleAssignmentActor.System("foreign"),
+            AuditActor.System("foreign"),
             DateTimeOffset.UtcNow);
         var otherSubject = new RoleAssignment(
             Guid.NewGuid(),
             tenantA,
             new PersonKey(Guid.NewGuid()),
             ControlTowerRole.Administrator,
-            RoleAssignmentActor.System("other-subject"),
+            AuditActor.System("other-subject"),
             DateTimeOffset.UtcNow);
         var tenants = new TenantContextAccessor();
         using var _ = tenants.BeginScope(tenantA);
@@ -534,12 +625,13 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         var service = new RoleAssignmentService(
             new StaticPersonKeyMap(subjectKey),
             leakyAssignStore,
-            tenants);
+            tenants,
+            TimeProvider.System);
 
         var assigned = await service.AssignAsync(
             Guid.NewGuid(),
             ControlTowerRole.Administrator,
-            RoleAssignmentActor.System("tenant-a"));
+            AuditActor.System("tenant-a"));
 
         Assert.NotEqual(foreign.Id, assigned);
         Assert.Equal(tenantA, leakyAssignStore.Committed!.Tenant);
@@ -550,11 +642,12 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         var revokeService = new RoleAssignmentService(
             new StaticPersonKeyMap(subjectKey),
             leakyRevokeStore,
-            tenants);
+            tenants,
+            TimeProvider.System);
         var exception = await Assert.ThrowsAsync<RoleAssignmentException>(
             () => revokeService.RevokeAsync(
                 foreign.Id,
-                RoleAssignmentActor.System("tenant-a")));
+                AuditActor.System("tenant-a")));
         Assert.Equal(
             "Role assignment not found in this tenant.",
             exception.Message);
@@ -566,7 +659,7 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
             tenantA,
             subjectKey,
             ControlTowerRole.Viewer,
-            RoleAssignmentActor.System("tenant-a"),
+            AuditActor.System("tenant-a"),
             DateTimeOffset.UtcNow);
         var wrongIdStore = new LeakyRoleAssignmentStore(
             wrongIdAssignment,
@@ -574,11 +667,12 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         var wrongIdService = new RoleAssignmentService(
             new StaticPersonKeyMap(subjectKey),
             wrongIdStore,
-            tenants);
+            tenants,
+            TimeProvider.System);
         exception = await Assert.ThrowsAsync<RoleAssignmentException>(
             () => wrongIdService.RevokeAsync(
                 Guid.NewGuid(),
-                RoleAssignmentActor.System("tenant-a")));
+                AuditActor.System("tenant-a")));
         Assert.Equal(
             "Role assignment not found in this tenant.",
             exception.Message);
@@ -595,7 +689,7 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         var events = new CapturingEventStore();
         var store = new InMemoryRoleAssignmentStore(tenants, events);
         var assignedAt = DateTimeOffset.UtcNow;
-        var actor = RoleAssignmentActor.System("test");
+        var actor = AuditActor.System("test");
         var assignment = new RoleAssignment(
             Guid.NewGuid(),
             tenant,
@@ -606,11 +700,12 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         var canonical = new RoleAssignmentChanged
         {
             AssignmentId = assignment.Id,
-            SubjectPersonKey = assignment.SubjectPersonKey.Value,
+            SubjectPersonKey = assignment.SubjectPersonKey,
             Role = "Viewer",
             OrganizationScope = "TenantWide",
             Change = "Assigned",
-            ChangedBy = actor.ToString(),
+            ChangedBy = actor,
+            Version = assignment.Version,
             OccurredAt = assignedAt,
         };
         RoleAssignmentChanged[] mismatches =
@@ -619,7 +714,7 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
             canonical with { Change = "Revoked" },
             canonical with
             {
-                ChangedBy = RoleAssignmentActor.System("forged").ToString(),
+                ChangedBy = AuditActor.System("forged"),
             },
             canonical with { OccurredAt = assignedAt.AddSeconds(1) },
         ];
@@ -627,13 +722,82 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         foreach (var mismatch in mismatches)
         {
             await Assert.ThrowsAsync<InvalidOperationException>(
-                () => store.CommitAsync(assignment, mismatch));
+                () => store.CommitAsync(
+                    assignment,
+                    mismatch,
+                    AssignmentMetadata(assignment, actor),
+                    expectedVersion: 0));
+        }
+
+        EventAppendMetadata[] metadataMismatches =
+        [
+            new(
+                EventReference.For(
+                    "role-assignment",
+                    Guid.NewGuid()),
+                actor,
+                correlationReference: EventReference.For(
+                    "role-assignment-command",
+                    Guid.NewGuid())),
+            new(
+                EventReference.For(
+                    "role-assignment",
+                    assignment.Id),
+                AuditActor.System("forged"),
+                correlationReference: EventReference.For(
+                    "role-assignment-command",
+                    Guid.NewGuid())),
+            new(
+                EventReference.For(
+                    "role-assignment",
+                    assignment.Id),
+                actor,
+                reason: "forged",
+                EventReference.For(
+                    "role-assignment-command",
+                    Guid.NewGuid())),
+            new(
+                EventReference.For(
+                    "role-assignment",
+                    assignment.Id),
+                actor),
+            new(
+                EventReference.For(
+                    "role-assignment",
+                    assignment.Id),
+                actor,
+                correlationReference:
+                    EventReference.For(
+                        "test-operation",
+                        Guid.NewGuid())),
+            new(
+                EventReference.For(
+                    "role-assignment",
+                    assignment.Id),
+                actor,
+                correlationReference:
+                    new EventReference(
+                        "role-assignment-command",
+                        "not-a-guid")),
+        ];
+        foreach (var metadataMismatch in metadataMismatches)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => store.CommitAsync(
+                    assignment,
+                    canonical,
+                    metadataMismatch,
+                    expectedVersion: 0));
         }
 
         Assert.Equal(0, events.AppendCount);
         Assert.Null(await store.GetAsync(assignment.Id));
         await Assert.ThrowsAsync<NotSupportedException>(
-            () => store.CommitAsync(assignment, canonical));
+            () => store.CommitAsync(
+                assignment,
+                canonical,
+                AssignmentMetadata(assignment, actor),
+                expectedVersion: 0));
         Assert.Equal(1, events.AppendCount);
         Assert.Null(await store.GetAsync(assignment.Id));
     }
@@ -654,10 +818,13 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         var tenants =
             scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
         using var _ = tenants.BeginScope(new TenantId(tenant));
-        Assert.Empty(
+        Assert.DoesNotContain(
             await scope.ServiceProvider
                 .GetRequiredService<IPrivilegedAccessProjection>()
-                .ListAsync());
+                .ListAsync(),
+            entry =>
+                entry.Record.Resource.Value
+                == "trust.privileged-access-log");
         var eventPayloads = (await scope.ServiceProvider
                 .GetRequiredService<IEventStore>()
                 .ReadAllAsync())
@@ -667,10 +834,7 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
             payload =>
                 payload.Contains(
                     "trust.privileged-access-log",
-                    StringComparison.OrdinalIgnoreCase)
-                || payload.Contains(
-                    "PrivilegedReadRecorded",
-                    StringComparison.Ordinal));
+                    StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -690,7 +854,7 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
             assignmentId = await service.AssignAsync(
                 actor,
                 ControlTowerRole.Administrator,
-                RoleAssignmentActor.System("test-assign"));
+                AuditActor.System("test-assign"));
         }
 
         var client = factory.ClientWithToken(
@@ -708,7 +872,7 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
                 scope.ServiceProvider.GetRequiredService<RoleAssignmentService>();
             await service.RevokeAsync(
                 assignmentId,
-                RoleAssignmentActor.System("test-revoke"));
+                AuditActor.System("test-revoke"));
         }
 
         Assert.Equal(
@@ -719,9 +883,12 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         var accessor =
             readScope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
         using var tenantScope = accessor.BeginScope(new TenantId(tenant));
-        var events = await readScope.ServiceProvider
+        var events = (await readScope.ServiceProvider
             .GetRequiredService<IEventStore>()
-            .ReadAllAsync();
+            .ReadAllAsync())
+            .Where(stored =>
+                stored.EventType == "RoleAssignmentChanged")
+            .ToList();
         Assert.Equal(2, events.Count);
         var changes = events
             .Select(stored => new
@@ -739,7 +906,7 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
                 Assert.Equal(change.Stored.EventId, change.Event.EventId);
                 Assert.NotEqual(default, change.Event.OccurredAt);
                 Assert.Equal(change.Stored.OccurredAt, change.Event.OccurredAt);
-                Assert.NotEqual(Guid.Empty, change.Event.SubjectPersonKey);
+                Assert.True(change.Event.SubjectPersonKey.IsValid);
             });
         var assignedChange = Assert.Single(
             changes,
@@ -747,8 +914,12 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         var revokedChange = Assert.Single(
             changes,
             change => change.Event.Change == "Revoked");
-        Assert.Equal("system:test-assign", assignedChange.Event.ChangedBy);
-        Assert.Equal("system:test-revoke", revokedChange.Event.ChangedBy);
+        Assert.Equal(
+            AuditActor.System("test-assign"),
+            assignedChange.Event.ChangedBy);
+        Assert.Equal(
+            AuditActor.System("test-revoke"),
+            revokedChange.Event.ChangedBy);
         Assert.Equal(
             assignedChange.Event.SubjectPersonKey,
             revokedChange.Event.SubjectPersonKey);
@@ -846,10 +1017,13 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         var httpAccessor = new HttpContextAccessor { HttpContext = http };
         var tenants = new TenantContextAccessor();
         var current = new CurrentEffectiveAccess();
+        var personKey = PersonKey.New();
         current.Set(
             tenantA,
             objectId,
-            ControlTowerAccessCatalog.Resolve([ControlTowerRole.Operator]));
+            ControlTowerAccessCatalog.Resolve(
+                personKey,
+                [ControlTowerRole.Operator]));
         var authorizer = new HttpContextLedgerAuthorizer(
             httpAccessor,
             tenants,
@@ -868,7 +1042,9 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
         current.Set(
             tenantA,
             objectId,
-            ControlTowerAccessCatalog.Resolve([ControlTowerRole.Viewer]));
+            ControlTowerAccessCatalog.Resolve(
+                personKey,
+                [ControlTowerRole.Viewer]));
         using (tenants.BeginScope(tenantA))
             Assert.False(authorizer.IsAllowed(LedgerCapability.TriageAssets));
     }
@@ -931,17 +1107,77 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
             StringComparison.OrdinalIgnoreCase);
     }
 
+    private static PersonKeyAccessContext PersonKeyAccess(
+        string purpose) =>
+        new(
+            AuditActor.System("role-authorization-test"),
+            purpose,
+            EventReference.For(
+                "test-operation",
+                Guid.NewGuid()),
+            PrivilegedReadPolicy.NotApplicable());
+
+    private static EventAppendMetadata AssignmentMetadata(
+        RoleAssignment assignment,
+        AuditActor actor) =>
+        new(
+            EventReference.For(
+                "role-assignment",
+                assignment.Id),
+            actor,
+            correlationReference: EventReference.For(
+                "role-assignment-command",
+                Guid.NewGuid()));
+
     private sealed class StaticPersonKeyMap(PersonKey key) : IPersonKeyMap
     {
         public Task<PersonKey?> FindAsync(
             Guid directoryObjectId,
+            PersonKeyAccessContext access,
             CancellationToken ct = default) =>
             Task.FromResult<PersonKey?>(key);
 
-        public Task<PersonKey> GetOrCreateAsync(
-            Guid directoryObjectId,
+        public Task<DirectoryIdentitySnapshot?> GetAsync(
+            PersonKey personKey,
+            PersonKeyAccessContext access,
             CancellationToken ct = default) =>
-            Task.FromResult(key);
+            Task.FromResult<DirectoryIdentitySnapshot?>(null);
+
+        public Task<PersonKeyMutationResult> GetOrCreateAsync(
+            DirectoryIdentitySnapshot identity,
+            PersonKeyAccessContext access,
+            CancellationToken ct = default) =>
+            Task.FromResult(
+                new PersonKeyMutationResult(
+                    PersonKeyMutationStatus.Existing,
+                    key,
+                    1));
+
+        public Task<PersonKeySeverResult> SeverAsync(
+            PersonKey personKey,
+            long expectedVersion,
+            PersonKeyAccessContext access,
+            CancellationToken ct = default) =>
+            Task.FromResult(
+                new PersonKeySeverResult(
+                    PersonKeySeverStatus.NotFound,
+                    null,
+                    null));
+    }
+
+    private sealed class CountingEffectiveAccessResolver(
+        EffectiveAccess access) : IEffectiveAccessResolver
+    {
+        public int ResolveCount { get; private set; }
+
+        public Task<EffectiveAccess> ResolveAsync(
+            Guid subjectObjectId,
+            PersonKeyAccessContext context,
+            CancellationToken ct = default)
+        {
+            ResolveCount++;
+            return Task.FromResult(access);
+        }
     }
 
     private sealed class StaticRoleAssignmentReader(
@@ -969,13 +1205,18 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
             CancellationToken ct = default) =>
             Task.FromResult(assignments);
 
-        public Task CommitAsync(
+        public Task<RoleAssignmentCommitResult> CommitAsync(
             RoleAssignment roleAssignment,
             RoleAssignmentChanged changed,
+            EventAppendMetadata metadata,
+            long expectedVersion,
             CancellationToken ct = default)
         {
             Committed = roleAssignment;
-            return Task.CompletedTask;
+            return Task.FromResult(
+                new RoleAssignmentCommitResult(
+                    RoleAssignmentCommitStatus.Applied,
+                    roleAssignment));
         }
     }
 
@@ -985,6 +1226,7 @@ public class RoleAuthorizationTests(LocalJwtWebFactory factory)
 
         public ValueTask<StoredEvent> AppendAsync(
             IDomainEvent @event,
+            EventAppendMetadata metadata,
             ReadOnlyMemory<byte> payload,
             CancellationToken ct = default)
         {

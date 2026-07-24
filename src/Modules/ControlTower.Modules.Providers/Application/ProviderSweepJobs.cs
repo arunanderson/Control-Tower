@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ControlTower.Modules.Providers.Domain;
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 
 namespace ControlTower.Modules.Providers.Application;
@@ -13,8 +14,15 @@ public sealed class ProviderSweepRequestService(
 {
     public const string Topic = "provider.sweep-requested";
 
-    public async Task<Guid> RequestAsync(string connectionId, ProviderCapability capability, CancellationToken ct = default)
+    public async Task<Guid> RequestAsync(
+        string connectionId,
+        ProviderCapability capability,
+        AuditActor requestedBy,
+        CancellationToken ct = default)
     {
+        if (!requestedBy.IsValid)
+            throw new ProviderException(
+                "A provider-sweep request actor is required.");
         var connection = await connections.GetAsync(connectionId, ct)
             ?? throw new ProviderException($"Provider connection '{connectionId}' was not found in this tenant.");
         if (!connection.Enabled) throw new ProviderException($"Provider connection '{connectionId}' is disabled.");
@@ -32,7 +40,19 @@ public sealed class ProviderSweepRequestService(
             Capability = capability.ToString(),
         };
         var payload = JsonSerializer.SerializeToUtf8Bytes(@event);
-        await events.AppendAsync(@event, payload, ct);
+        await events.AppendAsync(
+            @event,
+            new EventAppendMetadata(
+                EventReference.For(
+                    "provider-sweep",
+                    jobId),
+                requestedBy,
+                reason: null,
+                new EventReference(
+                    "provider-connection",
+                    connection.ConnectionId)),
+            payload,
+            ct);
         await outbox.EnqueueAsync(Topic, payload, ct);
         return @event.JobId;
     }

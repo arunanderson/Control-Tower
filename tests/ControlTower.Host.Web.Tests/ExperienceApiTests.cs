@@ -8,7 +8,9 @@ using System.Threading.Tasks;
 using ControlTower.Modules.Audit;
 using ControlTower.Modules.Ledger.Application;
 using ControlTower.Modules.Trust.Authorization;
+using ControlTower.Platform.Audit;
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Modules.Ledger.Domain;
 using ControlTower.Platform.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
@@ -68,7 +70,10 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         var objectId = Guid.NewGuid();
         var client = ClientFor(tenant, objectId);
         client.DefaultRequestHeaders.Add("X-Operator", "forged@example.com");
-        var canonicalActor = $"entra:{tenant:D}:{objectId:D}";
+        var canonicalActor = await ResolvedActorAsync(
+            client,
+            tenant,
+            objectId);
         var create = await client.PostAsJsonAsync("/api/economics/reporting-periods", new
         {
             start = "2026-06-01T00:00:00Z",
@@ -152,7 +157,15 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         return client;
     }
 
-    private sealed record AccessDto(Guid AccessId, string Actor, string Purpose, string Resource, string CorrelationId);
+    private sealed record AccessDto(
+        Guid AccessId,
+        string Actor,
+        string Purpose,
+        string Resource,
+        DateTimeOffset OccurredAt,
+        bool PolicyApplicable,
+        string? PolicyVersion,
+        string CorrelationId);
 
     [Fact]
     public async Task Privileged_log_requires_actor_and_purpose()
@@ -168,15 +181,53 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         var tenant = Guid.NewGuid();
         var objectId = Guid.NewGuid();
         var client = PrivilegedClient(tenant, objectId);
-        Assert.Empty((await client.GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access"))!);
+        var canonicalActor = await ResolvedActorAsync(
+            client,
+            tenant,
+            objectId);
+        var firstRead = await client.GetFromJsonAsync<
+            List<AccessDto>>(
+            "/api/trust/privileged-access");
+        Assert.DoesNotContain(
+            firstRead!,
+            entry =>
+                entry.Resource
+                == "trust.privileged-access-log");
 
         var records = await client.GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access");
-        var record = Assert.Single(records!);
-        Assert.Equal($"entra:{tenant:D}:{objectId:D}", record.Actor);
+        var record = Assert.Single(
+            records!,
+            entry =>
+                entry.Resource
+                == "trust.privileged-access-log");
+        Assert.Equal(canonicalActor, record.Actor);
         Assert.NotEqual("forged-actor", record.Actor);
         Assert.Equal("Support investigation", record.Purpose);
         Assert.Equal("trust.privileged-access-log", record.Resource);
+        Assert.NotEqual(Guid.Empty, record.AccessId);
+        Assert.NotEqual(default, record.OccurredAt);
+        Assert.Equal(TimeSpan.Zero, record.OccurredAt.Offset);
+        Assert.Equal(
+            0,
+            record.OccurredAt.Ticks
+            % TimeSpan.TicksPerMicrosecond);
+        Assert.False(record.PolicyApplicable);
+        Assert.Null(record.PolicyVersion);
         Assert.False(string.IsNullOrWhiteSpace(record.CorrelationId));
+        var responseEvidence =
+            JsonSerializer.Serialize(records);
+        Assert.DoesNotContain(
+            objectId.ToString("D"),
+            responseEvidence,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            objectId.ToString("N"),
+            responseEvidence,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "forged-actor",
+            responseEvidence,
+            StringComparison.Ordinal);
 
         using var scope = factory.Services.CreateScope();
         var tenants = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
@@ -191,8 +242,31 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         var tenantA = Guid.NewGuid();
         var tenantB = Guid.NewGuid();
         await ClientFor(tenantA).GetAsync("/api/trust/coverage");
-        Assert.Empty((await PrivilegedClient(tenantA).GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access"))!);
-        Assert.Empty((await PrivilegedClient(tenantB).GetFromJsonAsync<List<AccessDto>>("/api/trust/privileged-access"))!);
+        Assert.DoesNotContain(
+            (await PrivilegedClient(tenantA)
+                .GetFromJsonAsync<List<AccessDto>>(
+                    "/api/trust/privileged-access"))!,
+            entry =>
+                entry.Resource
+                == "trust.privileged-access-log");
+        Assert.DoesNotContain(
+            (await PrivilegedClient(tenantB)
+                .GetFromJsonAsync<List<AccessDto>>(
+                    "/api/trust/privileged-access"))!,
+            entry =>
+                entry.Resource
+                == "trust.privileged-access-log");
+    }
+
+    [Fact]
+    public void Development_host_composes_the_complete_privileged_evidence_path()
+    {
+        using var scope = factory.Services.CreateScope();
+
+        Assert.IsType<PrivilegedReadEvidenceAuditor>(
+            scope.ServiceProvider
+                .GetRequiredService<
+                    IPrivilegedReadAuditor>());
     }
 
     [Fact]
@@ -202,6 +276,10 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         var objectId = Guid.NewGuid();
         var client = AdminClient(tenantA, objectId);
         client.DefaultRequestHeaders.Add("X-Operator", "forged@example.com");
+        var canonicalActor = await ResolvedActorAsync(
+            client,
+            tenantA,
+            objectId);
         var placed = await client.PostAsJsonAsync("/api/trust/legal-holds", new
         {
             dataClass = "UsageCostObservations",
@@ -210,7 +288,7 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         });
         Assert.Equal(HttpStatusCode.OK, placed.StatusCode);
         var holds = await client.GetFromJsonAsync<List<LegalHoldView>>("/api/trust/legal-holds");
-        Assert.Equal($"entra:{tenantA:D}:{objectId:D}", Assert.Single(holds!).PlacedBy);
+        Assert.Equal(canonicalActor, Assert.Single(holds!).PlacedBy);
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -236,6 +314,10 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         var tenant = Guid.NewGuid();
         var objectId = Guid.NewGuid();
         var client = AdminClient(tenant, objectId);
+        var canonicalActor = await ResolvedActorAsync(
+            client,
+            tenant,
+            objectId);
         var placed = await client.PostAsJsonAsync("/api/trust/legal-holds", new
         {
             dataClass = "All",
@@ -253,8 +335,8 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         var history = await client.GetFromJsonAsync<List<LegalHoldView>>("/api/trust/legal-holds");
         var hold = Assert.Single(history!);
         Assert.False(hold.IsActive);
-        Assert.Equal($"entra:{tenant:D}:{objectId:D}", hold.PlacedBy);
-        Assert.Equal($"entra:{tenant:D}:{objectId:D}", hold.ReleasedBy);
+        Assert.Equal(canonicalActor, hold.PlacedBy);
+        Assert.Equal(canonicalActor, hold.ReleasedBy);
         Assert.Equal("approval:GC-104", hold.ApprovalReference);
         Assert.Equal("Matter closed", hold.ReleaseReason);
 
@@ -265,6 +347,78 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
         Assert.Contains(stream, e => System.Text.Encoding.UTF8.GetString(e.Payload).Contains("Regulatory", StringComparison.Ordinal) ||
             System.Text.Encoding.UTF8.GetString(e.Payload).Contains("Litigation", StringComparison.Ordinal));
         Assert.Contains(stream, e => System.Text.Encoding.UTF8.GetString(e.Payload).Contains("approval:GC-104", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Invalid_legal_hold_evidence_never_changes_hold_state()
+    {
+        var tenant = new TenantId(Guid.NewGuid());
+        using var scope = factory.Services.CreateScope();
+        var tenants =
+            scope.ServiceProvider
+                .GetRequiredService<ITenantContextAccessor>();
+        using var _ = tenants.BeginScope(tenant);
+        var service =
+            scope.ServiceProvider
+                .GetRequiredService<LegalHoldService>();
+        var events =
+            scope.ServiceProvider
+                .GetRequiredService<IEventStore>();
+        var actor = AuditActor.System("legal-hold-test");
+
+        foreach (var invalidReason in new[]
+                 {
+                     $" {new string('x', 16)} ",
+                     new string('x', 2049),
+                     "invalid\u0001reason",
+                     "invalid\uD800reason",
+                 })
+        {
+            await Assert.ThrowsAsync<LegalHoldException>(
+                () => service.PlaceAsync(
+                    new LegalHoldScope(
+                        RetentionDataClass.DomainEvents),
+                    invalidReason,
+                    actor));
+        }
+
+        Assert.Empty(await service.ListAsync());
+        Assert.Empty(await events.ReadAllAsync());
+
+        var holdId = await service.PlaceAsync(
+            new LegalHoldScope(
+                RetentionDataClass.DomainEvents),
+            "Regulatory preservation",
+            actor);
+        var baselineEventCount =
+            (await events.ReadAllAsync()).Count;
+
+        var invalidReleases = new[]
+        {
+            (Reason: $" {new string('x', 16)} ", Approval: "GC-100"),
+            (Reason: new string('x', 2049), Approval: "GC-100"),
+            (Reason: "invalid\u0001reason", Approval: "GC-100"),
+            (Reason: "invalid\uD800reason", Approval: "GC-100"),
+            (Reason: "Matter closed", Approval: new string('a', 257)),
+            (Reason: "Matter closed", Approval: "bad\u0001approval"),
+            (Reason: "Matter closed", Approval: " padded-approval "),
+        };
+        foreach (var invalid in invalidReleases)
+        {
+            await Assert.ThrowsAsync<LegalHoldException>(
+                () => service.ReleaseAsync(
+                    holdId,
+                    actor,
+                    invalid.Reason,
+                    invalid.Approval));
+
+            Assert.True(
+                Assert.Single(
+                    await service.ListAsync()).IsActive);
+            Assert.Equal(
+                baselineEventCount,
+                (await events.ReadAllAsync()).Count);
+        }
     }
 
     [Fact]
@@ -320,6 +474,29 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
             objectId: objectId,
             roles: [ControlTowerRole.Administrator]);
 
+    private static async Task<string> ResolvedActorAsync(
+        HttpClient client,
+        Guid directoryTenant,
+        Guid objectId)
+    {
+        var identity =
+            await client.GetFromJsonAsync<WhoAmI>("/whoami");
+        var actor = Assert.IsType<string>(identity!.Actor);
+        Assert.StartsWith(
+            "person:",
+            actor,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            directoryTenant.ToString("D"),
+            actor,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            objectId.ToString("D"),
+            actor,
+            StringComparison.OrdinalIgnoreCase);
+        return actor;
+    }
+
     private static ObservationDescriptor Obs(string value) =>
         new(Guid.NewGuid(), new NativeIdentifier("sys", "t", value), "Seeded", "agent", "Self-reported / Manual Import");
 
@@ -333,12 +510,19 @@ public class ExperienceApiTests(LocalJwtWebFactory factory) : IClassFixture<Loca
 
         var a = (await svc.ResolveAsync(Obs("X"))).AssetId!.Value;
         var b = (await svc.ResolveAsync(Obs("Y"))).AssetId!.Value;
-        await svc.ApproveManualLinkAsync(b, NativeIdentifierSet.Of(new NativeIdentifier("sys", "t", "X")), null, "seed");
+        await svc.ApproveManualLinkAsync(
+            b,
+            NativeIdentifierSet.Of(
+                new NativeIdentifier("sys", "t", "X")),
+            null,
+            AuditActor.System("test-seed"));
         await svc.ResolveAsync(Obs("X")); // X now maps to A and B → collision → merge case
         return (a.Value, b.Value);
     }
 
     private sealed record CaseDto(Guid MergeCaseId, string Confidence, string Reason);
+
+    private sealed record WhoAmI(string Tenant, string? Actor);
 
     [Fact]
     public async Task Merge_case_queue_lists_collisions_and_an_operator_can_resolve_them()

@@ -5,12 +5,18 @@ using ControlTower.Modules.Economics.Application;
 using ControlTower.Modules.Economics.Domain;
 using ControlTower.Modules.Economics.Infrastructure;
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 
 namespace ControlTower.Modules.Economics.Tests;
 
 public class ReportingSnapshotTests
 {
+    private static readonly AuditActor Finance =
+        AuditActor.System("finance");
+    private static readonly AuditActor Controller =
+        AuditActor.System("controller");
+
     private sealed record Rig(
         ReportingSnapshotService Service,
         IEconomicsStore Store,
@@ -22,7 +28,15 @@ public class ReportingSnapshotTests
         var tenants = new TenantContextAccessor();
         var store = new InMemoryEconomicsStore(tenants);
         var events = new InMemoryEventStore(tenants);
-        return new Rig(new ReportingSnapshotService(store, events, tenants), store, events, tenants);
+        return new Rig(
+            new ReportingSnapshotService(
+                store,
+                events,
+                tenants,
+                TimeProvider.System),
+            store,
+            events,
+            tenants);
     }
 
     private static ReportInputBasis Basis(string watermark = "observation:100") => new()
@@ -50,16 +64,16 @@ public class ReportingSnapshotTests
         using var _ = rig.Tenants.BeginScope(new TenantId(Guid.NewGuid()));
         var periodId = await ClosingPeriodAsync(rig);
 
-        var snapshot = await rig.Service.FreezeAsync(periodId, "{\"totalSpend\":125.50}", Basis(), "finance@example.com");
+        var snapshot = await rig.Service.FreezeAsync(periodId, "{\"totalSpend\":125.50}", Basis(), Finance);
 
         Assert.Equal(1, snapshot.Version);
-        Assert.Equal("finance@example.com", snapshot.SignedBy);
+        Assert.Equal(Finance.ToString(), snapshot.SignedBy);
         Assert.NotEmpty(snapshot.InputBasisHash);
         Assert.Null(snapshot.SupersedesSnapshotId);
         var period = Assert.Single(await rig.Service.PeriodsAsync());
         Assert.Equal("Frozen", period.State);
         await Assert.ThrowsAsync<EconomicsException>(() =>
-            rig.Service.FreezeAsync(periodId, "{}", Basis(), "finance@example.com"));
+            rig.Service.FreezeAsync(periodId, "{}", Basis(), Finance));
     }
 
     [Fact]
@@ -68,11 +82,11 @@ public class ReportingSnapshotTests
         var rig = Build();
         using var _ = rig.Tenants.BeginScope(new TenantId(Guid.NewGuid()));
         var periodId = await ClosingPeriodAsync(rig);
-        var first = await rig.Service.FreezeAsync(periodId, "{\"totalSpend\":125.50}", Basis(), "finance@example.com");
+        var first = await rig.Service.FreezeAsync(periodId, "{\"totalSpend\":125.50}", Basis(), Finance);
         var firstBytes = JsonSerializer.SerializeToUtf8Bytes(first);
 
         var second = await rig.Service.RestateAsync(
-            periodId, "{\"totalSpend\":127.00}", Basis("observation:104"), "controller@example.com", "Late invoice");
+            periodId, "{\"totalSpend\":127.00}", Basis("observation:104"), Controller, "Late invoice");
         var history = await rig.Service.SnapshotsAsync(periodId);
 
         Assert.Equal(2, second.Version);
@@ -83,22 +97,88 @@ public class ReportingSnapshotTests
     }
 
     [Fact]
+    public async Task Invalid_restatement_evidence_leaves_the_frozen_period_unchanged()
+    {
+        var rig = Build();
+        using var _ = rig.Tenants.BeginScope(
+            new TenantId(Guid.NewGuid()));
+        var periodId = await ClosingPeriodAsync(rig);
+        await rig.Service.FreezeAsync(
+            periodId,
+            "{}",
+            Basis(),
+            Finance);
+
+        foreach (var invalidReason in new[]
+                 {
+                     " padded reason ",
+                     new string('x', 2049),
+                     "invalid\u0001reason",
+                     "invalid\uD800reason",
+                 })
+        {
+            await Assert.ThrowsAsync<EconomicsException>(
+                () => rig.Service.RestateAsync(
+                    periodId,
+                    "{\"corrected\":true}",
+                    Basis("observation:101"),
+                    Controller,
+                    invalidReason));
+
+            Assert.Equal(
+                "Frozen",
+                Assert.Single(
+                    await rig.Service.PeriodsAsync())
+                    .State);
+            Assert.Single(
+                await rig.Service.SnapshotsAsync(
+                    periodId));
+            Assert.Single(await rig.Events.ReadAllAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Invalid_freeze_signer_leaves_the_closing_period_unchanged()
+    {
+        var rig = Build();
+        using var _ = rig.Tenants.BeginScope(
+            new TenantId(Guid.NewGuid()));
+        var periodId = await ClosingPeriodAsync(rig);
+
+        await Assert.ThrowsAsync<EconomicsException>(
+            () => rig.Service.FreezeAsync(
+                periodId,
+                "{}",
+                Basis(),
+                default));
+
+        Assert.Equal(
+            "Closing",
+            Assert.Single(
+                await rig.Service.PeriodsAsync())
+                .State);
+        Assert.Empty(
+            await rig.Service.SnapshotsAsync(periodId));
+        Assert.Empty(await rig.Events.ReadAllAsync());
+    }
+
+    [Fact]
     public async Task Freeze_and_restatement_events_capture_identity_signer_reason_and_hash_chain()
     {
         var rig = Build();
         using var _ = rig.Tenants.BeginScope(new TenantId(Guid.NewGuid()));
         var periodId = await ClosingPeriodAsync(rig);
-        var first = await rig.Service.FreezeAsync(periodId, "{}", Basis(), "finance@example.com");
-        var second = await rig.Service.RestateAsync(periodId, "{\"corrected\":true}", Basis("observation:101"), "controller@example.com", "Correction");
+        var first = await rig.Service.FreezeAsync(periodId, "{}", Basis(), Finance);
+        var second = await rig.Service.RestateAsync(periodId, "{\"corrected\":true}", Basis("observation:101"), Controller, "Correction");
 
         var stream = await rig.Events.ReadAllAsync();
         Assert.Equal(2, stream.Count);
         var frozen = Encoding.UTF8.GetString(stream[0].Payload);
         var restated = Encoding.UTF8.GetString(stream[1].Payload);
         Assert.Contains(first.Id.ToString(), frozen, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("finance@example.com", frozen);
+        Assert.Contains(Finance.OpaqueId, frozen);
         Assert.Contains(second.Id.ToString(), restated, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("controller@example.com", restated);
+        Assert.Contains(Controller.OpaqueId, restated);
         Assert.Contains("Correction", restated);
         Assert.Equal(stream[0].Hash, stream[1].PreviousHash);
     }
@@ -112,7 +192,7 @@ public class ReportingSnapshotTests
         using (rig.Tenants.BeginScope(tenantA))
         {
             periodId = await ClosingPeriodAsync(rig);
-            await rig.Service.FreezeAsync(periodId, "{}", Basis(), "finance@example.com");
+            await rig.Service.FreezeAsync(periodId, "{}", Basis(), Finance);
         }
 
         using (rig.Tenants.BeginScope(new TenantId(Guid.NewGuid())))

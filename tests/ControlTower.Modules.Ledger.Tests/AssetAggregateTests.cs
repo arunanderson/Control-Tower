@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using ControlTower.Modules.Ledger.Domain;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 using Xunit;
 
@@ -9,6 +10,10 @@ namespace ControlTower.Modules.Ledger.Tests;
 public class AssetAggregateTests
 {
     private static readonly TenantId Tenant = new(Guid.NewGuid());
+    private static readonly AuditActor SystemActor =
+        AuditActor.System("ledger-test");
+    private static PersonRef Person() =>
+        new(PersonKey.New());
     private static AIAsset Discover(string type = "agent") =>
         AIAsset.Discover(Tenant, "Sales Copilot", new AssetType(type), TaxonomyScheme.Default);
 
@@ -32,7 +37,7 @@ public class AssetAggregateTests
     public void Register_before_triage_is_illegal()
     {
         var asset = Discover();
-        Assert.Throws<DomainException>(() => asset.Register("purpose", new PersonRef("o", "Alice")));
+        Assert.Throws<DomainException>(() => asset.Register("purpose", Person()));
     }
 
     [Fact]
@@ -40,7 +45,7 @@ public class AssetAggregateTests
     {
         var asset = Discover();
         asset.Triage();
-        asset.Register("Drafts sales emails", new PersonRef("obj-1", "Alice"));
+        asset.Register("Drafts sales emails", Person());
 
         Assert.Equal(RegistrationStatus.Registered, asset.RegistrationStatus);
         Assert.Equal("Drafts sales emails", asset.BusinessPurpose);
@@ -52,7 +57,7 @@ public class AssetAggregateTests
     {
         var asset = Discover();
         asset.Triage();
-        Assert.Throws<DomainException>(() => asset.Register(" ", new PersonRef("o", "Alice")));
+        Assert.Throws<DomainException>(() => asset.Register(" ", Person()));
     }
 
     [Fact]
@@ -79,14 +84,14 @@ public class AssetAggregateTests
     {
         var asset = Discover();
         asset.Triage();
-        var alice = new PersonRef("a", "Alice");
+        var alice = Person();
         asset.Register("purpose", alice);
         Assert.False(asset.IsOwnerless);
 
         asset.LapseOwnership(alice);
         Assert.True(asset.IsOwnerless);
 
-        asset.AssignOwnership(new PersonRef("b", "Bob"), OwnershipRole.Owner);
+        asset.AssignOwnership(Person(), OwnershipRole.Owner);
         Assert.False(asset.IsOwnerless);
         Assert.Equal(2, asset.Ownerships.Count); // history is never overwritten
     }
@@ -98,16 +103,16 @@ public class AssetAggregateTests
         Assert.Equal(MatchConfidence.Manual, asset.MatchConfidence);
 
         var low = asset.AddResolutionLink(NativeIdentifierSet.Of(new NativeIdentifier("csv", "csv:key", "b1")),
-            MatchMethod.Heuristic, MatchConfidence.Low, "system");
+            MatchMethod.Heuristic, MatchConfidence.Low, SystemActor);
         Assert.Equal(MatchConfidence.Low, asset.MatchConfidence);
 
         // A stronger link does NOT mask the weak one — lowest-confidence-wins (ADR-024/025).
         asset.AddResolutionLink(NativeIdentifierSet.Of(new NativeIdentifier("csv", "csv:key", "a1")),
-            MatchMethod.DocumentedJoin, MatchConfidence.High, "system");
+            MatchMethod.DocumentedJoin, MatchConfidence.High, SystemActor);
         Assert.Equal(MatchConfidence.Low, asset.MatchConfidence);
 
         // Sever (not delete) the weak link → the link is retained, and roll-up rises to High.
-        asset.SeverResolutionLink(low.Id, "system", "superseded by documented join");
+        asset.SeverResolutionLink(low.Id, SystemActor, "superseded by documented join");
         Assert.Equal(MatchConfidence.High, asset.MatchConfidence);
         Assert.Equal(2, asset.ResolutionLinks.Count); // severed link retained
         Assert.Single(asset.ActiveResolutionLinks);
@@ -120,7 +125,7 @@ public class AssetAggregateTests
         var asset = Discover();
         asset.DequeueEvents();
         asset.AddResolutionLink(NativeIdentifierSet.Of(new NativeIdentifier("graph", "appId", "a1")),
-            MatchMethod.DocumentedJoin, MatchConfidence.High, "system");
+            MatchMethod.DocumentedJoin, MatchConfidence.High, SystemActor);
         Assert.Contains(asset.DequeueEvents(), e => e is MatchConfidenceChanged { To: MatchConfidence.High });
     }
 }

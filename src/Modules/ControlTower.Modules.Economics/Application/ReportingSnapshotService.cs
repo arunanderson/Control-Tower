@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using ControlTower.Modules.Economics.Domain;
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 
 namespace ControlTower.Modules.Economics.Application;
@@ -30,7 +31,11 @@ public sealed record ReportSnapshotView(
 /// C3 reporting-period lifecycle and immutable snapshot history (ADR-016). C7 invokes this service;
 /// it does not calculate or persist a second economics model.
 /// </summary>
-public sealed class ReportingSnapshotService(IEconomicsStore store, IEventStore events, ITenantContextAccessor tenants)
+public sealed class ReportingSnapshotService(
+    IEconomicsStore store,
+    IEventStore events,
+    ITenantContextAccessor tenants,
+    TimeProvider clock)
 {
     public async Task<Guid> CreatePeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
     {
@@ -50,7 +55,7 @@ public sealed class ReportingSnapshotService(IEconomicsStore store, IEventStore 
         Guid periodId,
         string payloadJson,
         ReportInputBasis inputBasis,
-        string signedBy,
+        AuditActor signedBy,
         CancellationToken ct = default)
     {
         var period = await RequiredPeriodAsync(periodId, ct);
@@ -59,19 +64,29 @@ public sealed class ReportingSnapshotService(IEconomicsStore store, IEventStore 
 
         var basis = ValidateAndCopyBasis(inputBasis);
         ValidateJson(payloadJson);
-        var now = DateTimeOffset.UtcNow;
-        period.Freeze(now, signedBy);
+        var now = EventEnvelopeCanonicalizer.NormalizeTimestamp(
+            clock.GetUtcNow());
         var snapshot = NewSnapshot(period, 1, payloadJson, basis, signedBy, now, null, null);
-        await store.AppendSnapshotAsync(snapshot, ct);
-        await store.SavePeriodAsync(period, ct);
-        await AppendAsync(new ReportingPeriodFrozen
+        var @event = new ReportingPeriodFrozen
         {
             PeriodId = period.Id,
             SnapshotId = snapshot.Id,
             Version = snapshot.Version,
             InputBasisHash = snapshot.InputBasisHash,
             SignedBy = snapshot.SignedBy,
-        }, ct);
+        };
+        var prepared = PrepareEvent(
+            @event,
+            signedBy,
+            reason: null,
+            EventReference.For(
+                "report-snapshot",
+                snapshot.Id));
+
+        period.Freeze(now, signedBy);
+        await store.AppendSnapshotAsync(snapshot, ct);
+        await store.SavePeriodAsync(period, ct);
+        await AppendAsync(prepared, ct);
         return ToView(snapshot);
     }
 
@@ -79,7 +94,7 @@ public sealed class ReportingSnapshotService(IEconomicsStore store, IEventStore 
         Guid periodId,
         string payloadJson,
         ReportInputBasis inputBasis,
-        string signedBy,
+        AuditActor signedBy,
         string reason,
         CancellationToken ct = default)
     {
@@ -89,12 +104,18 @@ public sealed class ReportingSnapshotService(IEconomicsStore store, IEventStore 
         var previous = history.LastOrDefault() ?? throw new EconomicsException("A period must be frozen before it can be restated.");
         var basis = ValidateAndCopyBasis(inputBasis);
         ValidateJson(payloadJson);
-        var now = DateTimeOffset.UtcNow;
-        period.Restate();
-        var snapshot = NewSnapshot(period, previous.Version + 1, payloadJson, basis, signedBy, now, previous.Id, reason.Trim());
-        await store.AppendSnapshotAsync(snapshot, ct);
-        await store.SavePeriodAsync(period, ct);
-        await AppendAsync(new ReportingPeriodRestated
+        var now = EventEnvelopeCanonicalizer.NormalizeTimestamp(
+            clock.GetUtcNow());
+        var snapshot = NewSnapshot(
+            period,
+            previous.Version + 1,
+            payloadJson,
+            basis,
+            signedBy,
+            now,
+            previous.Id,
+            reason);
+        var @event = new ReportingPeriodRestated
         {
             PeriodId = period.Id,
             SnapshotId = snapshot.Id,
@@ -103,7 +124,19 @@ public sealed class ReportingSnapshotService(IEconomicsStore store, IEventStore 
             InputBasisHash = snapshot.InputBasisHash,
             SignedBy = snapshot.SignedBy,
             Reason = snapshot.RestatementReason!,
-        }, ct);
+        };
+        var prepared = PrepareEvent(
+            @event,
+            signedBy,
+            snapshot.RestatementReason,
+            EventReference.For(
+                "report-snapshot",
+                snapshot.Id));
+
+        period.Restate();
+        await store.AppendSnapshotAsync(snapshot, ct);
+        await store.SavePeriodAsync(period, ct);
+        await AppendAsync(prepared, ct);
         return ToView(snapshot);
     }
 
@@ -124,12 +157,12 @@ public sealed class ReportingSnapshotService(IEconomicsStore store, IEventStore 
         int version,
         string payloadJson,
         ReportInputBasis basis,
-        string signedBy,
+        AuditActor signedBy,
         DateTimeOffset frozenAt,
         Guid? supersedes,
         string? reason)
     {
-        if (string.IsNullOrWhiteSpace(signedBy)) throw new EconomicsException("A snapshot signer is required.");
+        if (!signedBy.IsValid) throw new EconomicsException("A snapshot signer is required.");
         return new ReportSnapshot
         {
             Id = Guid.NewGuid(),
@@ -140,7 +173,7 @@ public sealed class ReportingSnapshotService(IEconomicsStore store, IEventStore 
             InputBasis = basis,
             InputBasisHash = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(basis))).ToLowerInvariant(),
             PayloadJson = payloadJson,
-            SignedBy = signedBy.Trim(),
+            SignedBy = signedBy,
             SupersedesSnapshotId = supersedes,
             RestatementReason = reason,
         };
@@ -177,16 +210,60 @@ public sealed class ReportingSnapshotService(IEconomicsStore store, IEventStore 
         catch (JsonException) { throw new EconomicsException("Snapshot output payload must be valid JSON."); }
     }
 
-    private async Task AppendAsync(EconomicsEvent domainEvent, CancellationToken ct)
+    private static PreparedEvent PrepareEvent(
+        EconomicsEvent domainEvent,
+        AuditActor actor,
+        string? reason,
+        EventReference correlation)
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(domainEvent, domainEvent.GetType());
-        await events.AppendAsync(domainEvent, payload, ct);
+        var periodId = domainEvent switch
+        {
+            ReportingPeriodFrozen frozen =>
+                frozen.PeriodId,
+            ReportingPeriodRestated restated =>
+                restated.PeriodId,
+            _ => throw new EconomicsException(
+                "Unknown reporting-period event."),
+        };
+        try
+        {
+            return new PreparedEvent(
+                domainEvent,
+                new EventAppendMetadata(
+                    EventReference.For(
+                        "reporting-period",
+                        periodId),
+                    actor,
+                    reason,
+                    correlation),
+                payload);
+        }
+        catch (ArgumentException)
+        {
+            throw new EconomicsException(
+                "The reporting-period evidence context is invalid.");
+        }
     }
 
+    private async Task AppendAsync(
+        PreparedEvent prepared,
+        CancellationToken ct) =>
+        await events.AppendAsync(
+            prepared.Event,
+            prepared.Metadata,
+            prepared.Payload,
+            ct);
+
+    private sealed record PreparedEvent(
+        EconomicsEvent Event,
+        EventAppendMetadata Metadata,
+        byte[] Payload);
+
     private static ReportingPeriodView ToView(ReportingPeriod p) =>
-        new(p.Id, p.Start, p.End, p.State.ToString(), p.FrozenAt, p.FrozenBy);
+        new(p.Id, p.Start, p.End, p.State.ToString(), p.FrozenAt, p.FrozenBy?.ToString());
 
     private static ReportSnapshotView ToView(ReportSnapshot s) =>
         new(s.Id, s.PeriodId, s.Version, s.FrozenAt, s.InputBasis, s.InputBasisHash, s.PayloadJson,
-            s.SignedBy, s.SupersedesSnapshotId, s.RestatementReason);
+            s.SignedBy.ToString(), s.SupersedesSnapshotId, s.RestatementReason);
 }

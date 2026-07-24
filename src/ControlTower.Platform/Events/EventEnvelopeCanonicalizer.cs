@@ -4,24 +4,14 @@ using System.Text;
 namespace ControlTower.Platform.Events;
 
 /// <summary>
-/// Canonical binary integrity format for the P1-T05 storage frame. Format 1 deliberately covers the
-/// fields represented by the current event skeleton. P1-T06 adds the remaining E20 audit metadata
-/// before any durable event migration.
+/// Canonical binary integrity format for the complete E20 event record. Every variable field is
+/// length-delimited; optional fields carry an explicit presence byte; scalar values use network
+/// byte order and timestamps use signed UTC microseconds.
 /// </summary>
 public static class EventEnvelopeCanonicalizer
 {
-    public const int CurrentIntegrityFormatVersion = 1;
+    public const int CurrentIntegrityFormatVersion = 2;
     private const int GuidLength = 16;
-    private const int FixedLength =
-        sizeof(int)     // integrity format
-        + sizeof(long)  // position
-        + GuidLength    // tenant
-        + GuidLength    // event ID
-        + sizeof(int)   // event-type byte length
-        + sizeof(long)  // occurred-at UTC microseconds
-        + sizeof(long)  // recorded-at UTC microseconds
-        + sizeof(byte)  // privilege
-        + sizeof(int);  // payload byte length
 
     public static DateTimeOffset NormalizeTimestamp(DateTimeOffset value)
     {
@@ -36,34 +26,100 @@ public static class EventEnvelopeCanonicalizer
         ArgumentNullException.ThrowIfNull(storedEvent);
         Validate(storedEvent);
 
-        var eventType = Encoding.UTF8.GetBytes(storedEvent.EventType);
+        var eventType = Utf8(storedEvent.EventType);
+        var aggregateKind = Utf8(storedEvent.AggregateReference.Kind);
+        var aggregateValue = Utf8(storedEvent.AggregateReference.Value);
+        var actorId = Utf8(storedEvent.Actor.OpaqueId);
+        var reason = storedEvent.Reason is null
+            ? null
+            : Utf8(storedEvent.Reason);
+        var correlationKind =
+            storedEvent.CorrelationReference is { } correlation
+                ? Utf8(correlation.Kind)
+                : null;
+        var correlationValue =
+            storedEvent.CorrelationReference is { } correlationValueReference
+                ? Utf8(correlationValueReference.Value)
+                : null;
         var payload = storedEvent.PayloadMemory.Span;
+
         int length;
         try
         {
-            length = checked(FixedLength + eventType.Length + payload.Length);
+            length = checked(
+                sizeof(int) // integrity format
+                + sizeof(long) // position
+                + GuidLength // tenant
+                + GuidLength // event ID
+                + EncodedLength(eventType)
+                + EncodedLength(aggregateKind)
+                + EncodedLength(aggregateValue)
+                + sizeof(byte) // actor kind
+                + EncodedLength(actorId)
+                + sizeof(long) // occurred-at UTC microseconds
+                + sizeof(long) // recorded-at UTC microseconds
+                + sizeof(byte) // reason presence
+                + (reason is null ? 0 : EncodedLength(reason))
+                + sizeof(byte) // correlation presence
+                + (correlationKind is null
+                    ? 0
+                    : EncodedLength(correlationKind)
+                      + EncodedLength(correlationValue!))
+                + sizeof(byte) // privilege
+                + sizeof(int) // payload length
+                + payload.Length);
         }
         catch (OverflowException)
         {
             throw new EventIntegrityException(
                 "The event envelope is too large to canonicalize.");
         }
+
         var output = new byte[length];
         var span = output.AsSpan();
         var offset = 0;
 
-        WriteInt32(span, ref offset, storedEvent.IntegrityFormatVersion);
+        WriteInt32(
+            span,
+            ref offset,
+            storedEvent.IntegrityFormatVersion);
         WriteInt64(span, ref offset, storedEvent.Position);
         WriteGuid(span, ref offset, storedEvent.Tenant.Value);
         WriteGuid(span, ref offset, storedEvent.EventId);
-        WriteInt32(span, ref offset, eventType.Length);
-        eventType.CopyTo(span[offset..]);
-        offset += eventType.Length;
-        WriteInt64(span, ref offset, ToUnixMicroseconds(storedEvent.OccurredAt));
-        WriteInt64(span, ref offset, ToUnixMicroseconds(storedEvent.RecordedAt));
+        WriteBytes(span, ref offset, eventType);
+        WriteBytes(span, ref offset, aggregateKind);
+        WriteBytes(span, ref offset, aggregateValue);
+        span[offset++] = (byte)storedEvent.Actor.Kind;
+        WriteBytes(span, ref offset, actorId);
+        WriteInt64(
+            span,
+            ref offset,
+            ToUnixMicroseconds(storedEvent.OccurredAt));
+        WriteInt64(
+            span,
+            ref offset,
+            ToUnixMicroseconds(storedEvent.RecordedAt));
+        WriteOptionalBytes(span, ref offset, reason);
+        if (correlationKind is null)
+        {
+            span[offset++] = 0;
+        }
+        else
+        {
+            span[offset++] = 1;
+            WriteBytes(span, ref offset, correlationKind);
+            WriteBytes(span, ref offset, correlationValue!);
+        }
         span[offset++] = (byte)storedEvent.Privilege;
         WriteInt32(span, ref offset, payload.Length);
         payload.CopyTo(span[offset..]);
+        offset += payload.Length;
+
+        if (offset != output.Length)
+        {
+            throw new EventIntegrityException(
+                "The event envelope length is inconsistent.");
+        }
 
         return output;
     }
@@ -71,7 +127,8 @@ public static class EventEnvelopeCanonicalizer
     public static void Validate(StoredEvent storedEvent)
     {
         ArgumentNullException.ThrowIfNull(storedEvent);
-        if (storedEvent.IntegrityFormatVersion != CurrentIntegrityFormatVersion)
+        if (storedEvent.IntegrityFormatVersion
+            != CurrentIntegrityFormatVersion)
         {
             throw new EventIntegrityException(
                 "The event integrity format is unsupported.");
@@ -84,6 +141,29 @@ public static class EventEnvelopeCanonicalizer
             throw new EventIntegrityException("The event ID is invalid.");
 
         DomainEventContracts.ValidateEventType(storedEvent.EventType);
+        if (!storedEvent.AggregateReference.IsValid)
+        {
+            throw new EventIntegrityException(
+                "The event aggregate reference is invalid.");
+        }
+        if (!storedEvent.Actor.IsValid)
+        {
+            throw new EventIntegrityException(
+                "The event actor is invalid.");
+        }
+        try
+        {
+            _ = new EventAppendMetadata(
+                storedEvent.AggregateReference,
+                storedEvent.Actor,
+                storedEvent.Reason,
+                storedEvent.CorrelationReference);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new EventIntegrityException(
+                $"The event append metadata is invalid: {exception.Message}");
+        }
         if (!Enum.IsDefined(storedEvent.Privilege))
         {
             throw new EventIntegrityException(
@@ -104,7 +184,8 @@ public static class EventEnvelopeCanonicalizer
                     "The first event has an invalid previous hash.");
             }
         }
-        else if (!Sha256HashChain.IsCanonicalHash(storedEvent.PreviousHash))
+        else if (!Sha256HashChain.IsCanonicalHash(
+                     storedEvent.PreviousHash))
         {
             throw new EventIntegrityException(
                 "The event previous hash is invalid.");
@@ -137,7 +218,24 @@ public static class EventEnvelopeCanonicalizer
         }
     }
 
-    private static void ValidateNormalizedTimestamp(DateTimeOffset value)
+    private static byte[] Utf8(string value)
+    {
+        try
+        {
+            return EventText.EncodeUtf8(value);
+        }
+        catch (EncoderFallbackException)
+        {
+            throw new EventIntegrityException(
+                "The event envelope contains invalid Unicode.");
+        }
+    }
+
+    private static int EncodedLength(byte[] value) =>
+        checked(sizeof(int) + value.Length);
+
+    private static void ValidateNormalizedTimestamp(
+        DateTimeOffset value)
     {
         if (value.Offset != TimeSpan.Zero
             || value.UtcTicks % TimeSpan.TicksPerMicrosecond != 0)
@@ -147,7 +245,35 @@ public static class EventEnvelopeCanonicalizer
         }
     }
 
-    private static void WriteGuid(Span<byte> target, ref int offset, Guid value)
+    private static void WriteOptionalBytes(
+        Span<byte> target,
+        ref int offset,
+        byte[]? value)
+    {
+        if (value is null)
+        {
+            target[offset++] = 0;
+            return;
+        }
+
+        target[offset++] = 1;
+        WriteBytes(target, ref offset, value);
+    }
+
+    private static void WriteBytes(
+        Span<byte> target,
+        ref int offset,
+        byte[] value)
+    {
+        WriteInt32(target, ref offset, value.Length);
+        value.CopyTo(target[offset..]);
+        offset += value.Length;
+    }
+
+    private static void WriteGuid(
+        Span<byte> target,
+        ref int offset,
+        Guid value)
     {
         if (!value.TryWriteBytes(
                 target.Slice(offset, GuidLength),
@@ -161,7 +287,10 @@ public static class EventEnvelopeCanonicalizer
         offset += GuidLength;
     }
 
-    private static void WriteInt32(Span<byte> target, ref int offset, int value)
+    private static void WriteInt32(
+        Span<byte> target,
+        ref int offset,
+        int value)
     {
         BinaryPrimitives.WriteInt32BigEndian(
             target.Slice(offset, sizeof(int)),
@@ -169,7 +298,10 @@ public static class EventEnvelopeCanonicalizer
         offset += sizeof(int);
     }
 
-    private static void WriteInt64(Span<byte> target, ref int offset, long value)
+    private static void WriteInt64(
+        Span<byte> target,
+        ref int offset,
+        long value)
     {
         BinaryPrimitives.WriteInt64BigEndian(
             target.Slice(offset, sizeof(long)),

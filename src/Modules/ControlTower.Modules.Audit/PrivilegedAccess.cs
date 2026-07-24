@@ -1,68 +1,130 @@
 using System.Text.Json;
 using ControlTower.Platform.Audit;
 using ControlTower.Platform.Events;
+using ControlTower.Platform.Identity;
 using ControlTower.Platform.Tenancy;
 
 namespace ControlTower.Modules.Audit;
 
 public sealed record PrivilegedAccessLogEntry(
-    Guid AccessId,
-    PrivilegedReadRecord Record,
-    string CorrelationId);
+    PrivilegedReadRecord Record)
+{
+    public Guid AccessId => Record.AccessId;
+}
 
 [DomainEventContract("PrivilegedReadRecorded", EventPrivilege.Privileged)]
 public sealed record PrivilegedReadRecorded : IDomainEvent
 {
     public Guid EventId { get; init; } = Guid.NewGuid();
-    public DateTimeOffset OccurredAt { get; init; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset OccurredAt { get; init; } =
+        DateTimeOffset.UtcNow;
+
     public required Guid AccessId { get; init; }
-    public required string Actor { get; init; }
+
+    public required AuditActor Actor { get; init; }
+
     public required string Purpose { get; init; }
-    public required string Resource { get; init; }
-    public required string CorrelationId { get; init; }
+
+    public required EventReference Resource { get; init; }
+
+    public required PrivilegedReadPolicy Policy { get; init; }
+
+    public required EventReference CorrelationReference { get; init; }
 }
 
 public interface IPrivilegedAccessProjection
 {
-    Task ProjectAsync(PrivilegedAccessLogEntry entry, CancellationToken ct = default);
-    Task<IReadOnlyList<PrivilegedAccessLogEntry>> ListAsync(CancellationToken ct = default);
+    Task ProjectAsync(
+        PrivilegedAccessLogEntry entry,
+        CancellationToken ct = default);
+
+    Task<IReadOnlyList<PrivilegedAccessLogEntry>> ListAsync(
+        CancellationToken ct = default);
+}
+
+/// <summary>
+/// One C9 evidence path for every privileged read. The inner sink is adapter-owned; C9 appends the
+/// integrity-covered event and updates the customer-visible projection before the caller may release
+/// protected data.
+/// </summary>
+public sealed class PrivilegedReadEvidenceAuditor(
+    IPrivilegedReadRecordSink sink,
+    IPrivilegedAccessProjection projection,
+    IEventStore events,
+    ITenantContextAccessor tenants) : IPrivilegedReadAuditor
+{
+    public async ValueTask RecordAsync(
+        PrivilegedReadRecord record,
+        CancellationToken ct = default)
+    {
+        if (record.Tenant != tenants.Current)
+            throw new InvalidOperationException(
+                "Cross-tenant privileged-read evidence denied.");
+
+        var @event = new PrivilegedReadRecorded
+        {
+            AccessId = record.AccessId,
+            Actor = record.Actor,
+            Purpose = record.Purpose,
+            Resource = record.Resource,
+            Policy = record.Policy,
+            CorrelationReference =
+                record.CorrelationReference,
+            OccurredAt = record.OccurredAt,
+        };
+        var metadata = new EventAppendMetadata(
+            EventReference.For(
+                "privileged-read",
+                record.AccessId),
+            record.Actor,
+            record.Purpose,
+            record.CorrelationReference);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(@event);
+
+        await events.AppendAsync(
+            @event,
+            metadata,
+            payload,
+            ct);
+        await sink.StoreAsync(record, ct);
+        await projection.ProjectAsync(
+            new PrivilegedAccessLogEntry(record),
+            ct);
+    }
 }
 
 public sealed class PrivilegedAccessService(
     IPrivilegedReadAuditor auditor,
     IPrivilegedAccessProjection projection,
-    IEventStore events,
-    ITenantContextAccessor tenants)
+    ITenantContextAccessor tenants,
+    TimeProvider clock)
 {
     public async Task RecordReadAsync(
-        string actor,
+        AuditActor actor,
         string purpose,
-        string resource,
-        string correlationId,
+        EventReference resource,
+        PrivilegedReadPolicy policy,
+        EventReference correlationReference,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(actor)) throw new ArgumentException("Actor is required.", nameof(actor));
-        if (string.IsNullOrWhiteSpace(purpose)) throw new ArgumentException("Purpose is required.", nameof(purpose));
-        if (string.IsNullOrWhiteSpace(resource)) throw new ArgumentException("Resource is required.", nameof(resource));
-
         var accessId = Guid.NewGuid();
+        var occurredAt =
+            EventEnvelopeCanonicalizer.NormalizeTimestamp(
+                clock.GetUtcNow());
         var record = new PrivilegedReadRecord(
-            tenants.Current, actor.Trim(), "ExperienceRead", resource.Trim(), purpose.Trim(), DateTimeOffset.UtcNow);
+            accessId,
+            tenants.Current,
+            actor,
+            resource,
+            purpose,
+            policy,
+            correlationReference,
+            occurredAt);
         await auditor.RecordAsync(record, ct);
-
-        var @event = new PrivilegedReadRecorded
-        {
-            AccessId = accessId,
-            Actor = record.Actor,
-            Purpose = record.Purpose,
-            Resource = record.ResourceId,
-            CorrelationId = correlationId,
-            OccurredAt = record.OccurredAt,
-        };
-        await events.AppendAsync(@event, JsonSerializer.SerializeToUtf8Bytes(@event), ct);
-        await projection.ProjectAsync(new PrivilegedAccessLogEntry(accessId, record, correlationId), ct);
     }
 
-    public Task<IReadOnlyList<PrivilegedAccessLogEntry>> ListAsync(CancellationToken ct = default) =>
+    public Task<IReadOnlyList<PrivilegedAccessLogEntry>>
+        ListAsync(CancellationToken ct = default) =>
         projection.ListAsync(ct);
 }
