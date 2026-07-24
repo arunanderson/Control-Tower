@@ -33,6 +33,7 @@ allowed_files:
   - tests/ControlTower.ArchitectureTests/DomainEventContractTests.cs
   - tests/ControlTower.ArchitectureTests/PrivacyBoundaryTests.cs
   - docs/build/tasks/P1-T09-e16-e17-privacy-policy-foundations.md
+  - docs/build/deviations/DEV-003-p1-t09-e16-temporal-contract-correction.md
   - docs/build/evidence/EVIDENCE-P1-T09.md
   - docs/build/state/build-state.yaml
   - docs/build/state/dev-substitute-registry.md
@@ -103,8 +104,8 @@ acceptance_criteria:
 evidence_required: [docs/build/evidence/EVIDENCE-P1-T09.md]
 rollback: Revert the task commit or PR; this slice changes only code contracts and development in-memory state and creates no persistent or external state.
 requires_human_approval: true
-approved_by: Product Owner explicit frozen-blueprint correction approval on 2026-07-25
-approved_hash: "sha256:69a44f7208e30160726f75287f93c8b4915147ef845e703c39791e5b23cc3d05"
+approved_by: Product Owner standing frozen-blueprint conflict-resolution instruction on 2026-07-25
+approved_hash: "sha256:3a1068c5a4272648c42a2a84d7e6d50891958c954dd22df86a12e771a984f0df"
 ---
 
 ## Objective
@@ -151,7 +152,9 @@ that the original contract incorrectly gave E16 valid-time plus record-time sema
 4 §8 and the Stage 5 entity catalogue classify E16 as versioned simple evented history and reserve
 bitemporality for E17 and the other explicitly named entities. This correction removes E16
 valid-time/record-time fields and as-of queries, keeps E17 bitemporal, and does not modify the frozen
-blueprint or expand any other part of the task.
+blueprint or expand any other part of the task. The correction is recorded separately in
+`docs/build/deviations/DEV-003-p1-t09-e16-temporal-contract-correction.md` as required by the build
+constitution.
 
 ## Rollback
 
