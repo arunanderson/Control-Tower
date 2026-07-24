@@ -6,7 +6,7 @@ _Single source of build truth. Updated by the build agent as part of every task'
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Current phase**   | Phase 1 — production security, privacy and durable-data foundation                                           |
 | **Current task**    | P1-T08 — persist the C8 E18/E19 foundations in PostgreSQL                                                    |
-| **Overall state**   | **Migration 0002 and the durable E18/E19 adapters are complete and green in ephemeral PostgreSQL CI.**       |
+| **Overall state**   | **P1-T08 is blocked at PR #28's CI trust boundary on one forbidden-path Host test-fixture correction.**      |
 | **Product outcome** | One role-appropriate Control Tower for all technically observable AI use across the corporate-managed estate |
 | **Merge policy**    | Merge trains — agent may merge tenant-independent green PRs with a Merge Readiness Report                    |
 | **Last updated**    | 2026-07-24                                                                                                   |
@@ -68,7 +68,7 @@ now freeze the complete E20 and C8 semantics before durable storage:
 - Host resolves the human to `PersonKey` once and persists only the server-resolved opaque actor;
 - invalid evidence and provider-attribution mismatch fail before domain/observation mutation.
 
-The implementation is green with 253 backend and 114 SPA tests. P1-T07 adds the first durable
+The local implementation gates are green with 253 backend and 114 SPA tests. P1-T07 adds the first durable
 implementation behind the unchanged event-store port: migration 0001, forced RLS, a non-owner
 runtime role, transaction-local tenant binding, database-enforced immutability and atomic
 tenant-stream serialization. Apply, verify, guarded rollback, re-apply and hostile integration
@@ -81,6 +81,15 @@ severance. Its apply, verify, guarded rollback, exact baseline restoration, re-a
 suite are green on disposable `postgres:16.14-alpine3.24`. No shared, staging or production
 migration ran; no production key provider, Host composition, cloud resource or WORM anchor was
 introduced.
+
+PR #28 is open. Eight of nine CI workflows are green, including the architecture, migration 0002
+PostgreSQL suite, dependency, format, protected-path, secret, task-contract, readiness and SPA
+gates. The combined `build-test` workflow passed 252 of 253 backend tests but exposed one
+cross-platform test-fixture defect: a pre-existing Host test supplies unnormalised
+`DateTimeOffset.UtcNow` while P1-T08 correctly rejects non-UTC-microsecond E18 timestamps. The
+minimum correct change is confined to
+`tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs`, which the approved P1-T08 contract
+forbids. Production validation will not be weakened to accommodate the stale test.
 
 ## Microsoft sandbox evidence
 
@@ -113,16 +122,22 @@ Microsoft Agent 365 is not a dependency for the Control Tower. It is one optiona
 
 ## Approval boundary
 
-P1-T08 is complete and green. No later task has started. Product Owner approval is required before
-any pull request, merge or subsequent production-foundation task.
+P1-T08 is blocked at the CI trust boundary. Product Owner approval is required to add exactly
+`tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs` to P1-T08's allowed files and
+normalise that test's timestamp fixture. No production behavior, dependency, abstraction or
+security control change is requested.
 
-After approval, the recorded sequence continues with telemetry-policy, jurisdiction, privacy Gate
-2 and policy-as-of Gate 1 enforcement, followed by the remaining durable PostgreSQL/RLS,
-transactional outbox and Azure adapter work.
+After that correction and a green PR merge, implementation still cannot start the next train because
+the repository contains no approved incomplete post-P1-T08 task contract. The recorded direction is
+telemetry-policy, jurisdiction, privacy Gate 2 and policy-as-of Gate 1, but a bounded approved
+contract must name its exact first slice.
 
 Endpoint or browser events will not be onboarded before the privacy boundary is real.
 
-## Human gates — no immediate action required
+## Human gates
+
+- Immediate: approve the one-file P1-T08 CI-fixture scope correction described above.
+- Immediate after P1-T08 merge: approve the bounded next task contract; none currently exists.
 
 - Representative Microsoft tenant/licensing and consent when a real-provider validation task reaches
   that point.

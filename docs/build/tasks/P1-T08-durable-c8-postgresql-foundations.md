@@ -5,7 +5,7 @@ type: task-contract
 schema_version: 1
 epic: EPIC-1-2
 phase: PHASE-1
-status: complete
+status: blocked
 objective: Implement the frozen E18 RoleAssignment and E19 PersonKeyMap ports as tenant-isolated PostgreSQL adapters, author migration 0002, and prove atomic eventing, privileged field protection and O(1) severance only against disposable PostgreSQL 16 containers.
 blueprint_refs:
   - docs/blueprint/stage-05-conceptual-data-model.md#e19-personkeymap--the-gdpr-severance-point

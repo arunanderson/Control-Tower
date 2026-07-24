@@ -218,3 +218,44 @@ cloud resource, production credential, shared database, staging database or prod
 accessed or changed.
 
 Product Owner approval is now required before any pull request, merge or subsequent task.
+
+## GitHub CI trust-boundary result
+
+PR #28 was opened from commit `935a9fa` on 2026-07-24. Eight of nine CI workflows passed:
+architecture, dependency scan, format, production readiness, protected paths, secret scan,
+task-contract validation and SPA build/tests.
+
+The combined `build-test` workflow failed with 252 of 253 backend tests passing. Migration 0002 and
+all 26 PostgreSQL adapter tests passed in the approved disposable PostgreSQL service. The sole
+failure was:
+
+`ControlTower.Host.Web.Tests.RoleAuthorizationTests.Development_store_rejects_mismatched_assignment_audit_evidence`
+
+The test constructs E18 state/event time directly from `DateTimeOffset.UtcNow`. Linux supplied
+sub-microsecond ticks, so the P1-T08 shared semantic validator correctly rejected the tuple before
+the test's injected event-store failure. The test expected the older `NotSupportedException` path.
+Local macOS clock resolution did not expose the stale fixture.
+
+The correct production invariant is already implemented and directly required by P1-T08: every E18
+aggregate and event timestamp must be exact UTC microseconds. Weakening or bypassing that invariant
+would violate the contract. The minimum correction is to normalize the timestamp fixture in
+`tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs`.
+
+That file is explicitly forbidden by the approved P1-T08 contract. No allowed-file change can
+correct the stale test without weakening required production behavior. This is therefore the
+mandatory human gate defined by the build constitution: the task cannot complete without an exact
+scope amendment.
+
+### Merge Readiness Report
+
+- Blueprint alignment: aligned; no frozen file changed.
+- ADR compliance: aligned with ADR-015/021 timestamp-integrity and evidence requirements.
+- Tests: local 253/253 backend and 114/114 SPA; PR CI 252/253 backend.
+- CI status: eight workflows green; `build-test` red on the single Host test above.
+- Security status: production fail-closed timestamp validation is correct and must remain.
+- Architecture status: 15/15 architecture tests and the architecture CI workflow are green.
+- Technical debt introduced: none.
+- Known risk: merging while CI is red would bypass the repository trust boundary.
+- Deviation requested: none. Exact task-scope amendment required for one test file.
+- Merge recommendation: **do not merge** until the one-file scope amendment is approved, corrected
+  and all CI gates are green.
