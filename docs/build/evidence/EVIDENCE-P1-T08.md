@@ -348,3 +348,15 @@ an executable task contract and does not define allowed files, tests or acceptan
 
 After PR #28 merges, the next implementation must therefore stop at the mandatory Product Owner
 approval gate for a bounded next task contract. No later code task has been started.
+
+## Final scope-clarity correction
+
+The final pre-merge audit identified that the exact Product Owner-approved Host test path appeared
+in `allowed_files` while the unchanged broad Host-test forbidden glob remained below it. The
+contract now states explicitly that the exact allowed path is the sole exception to that glob and
+that every other Host test remains forbidden.
+
+This clarification does not widen the approved exception and changes no application, production,
+test, migration, dependency or architecture file. The completion commit `a32f466` passed all nine
+PR workflows; this documentation-only clarification must retain the same green trust boundary
+before merge.

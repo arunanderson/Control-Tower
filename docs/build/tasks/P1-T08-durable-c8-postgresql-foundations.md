@@ -66,6 +66,7 @@ preconditions:
   - DEC-001 selects Azure Database for PostgreSQL Flexible Server behind an adapter and permits local Docker PostgreSQL only as a disposable development substitute
   - The Product Owner explicitly approved P1-T05 through P1-T08 including C8 interface and event-backbone changes Npgsql 10.0.3 PostgreSQL 16.14 Alpine 3.24 ephemeral testing and authoring plus green-CI merge of migrations 0001 and 0002 on 2026-07-23
   - The Product Owner explicitly approved adding only tests/ControlTower.Host.Web.Tests/RoleAuthorizationTests.cs to the P1-T08 file scope solely to normalize the stale DateTimeOffset fixture on 2026-07-24
+  - That exact allowed Host test path is the sole exception to the broad Host-test forbidden glob; every other Host test path remains forbidden
   - No shared staging or production migration execution is authorised
 required_tests:
   - migration 0002 applies after migration 0001 under a distinct migration owner against postgres 16.14-alpine3.24
