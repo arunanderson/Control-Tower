@@ -16,4 +16,12 @@ $$;
 
 DROP SCHEMA event_store CASCADE;
 
+DO $$
+BEGIN
+    EXECUTE format(
+        'GRANT TEMPORARY ON DATABASE %I TO PUBLIC',
+        current_database());
+END;
+$$;
+
 COMMIT;

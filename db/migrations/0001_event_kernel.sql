@@ -352,6 +352,14 @@ $$;
 REVOKE ALL ON ALL TABLES IN SCHEMA event_store FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA event_store FROM PUBLIC;
 
+DO $$
+BEGIN
+    EXECUTE format(
+        'REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC',
+        current_database());
+END;
+$$;
+
 GRANT USAGE ON SCHEMA event_store TO control_tower_runtime;
 GRANT EXECUTE ON FUNCTION event_store.current_tenant_id()
     TO control_tower_runtime;

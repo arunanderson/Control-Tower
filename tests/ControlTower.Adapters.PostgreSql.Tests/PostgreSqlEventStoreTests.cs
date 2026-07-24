@@ -139,6 +139,68 @@ public sealed class PostgreSqlEventStoreTests(
     }
 
     [Fact]
+    public async Task Append_snapshots_mutable_input_once_before_database_wait()
+    {
+        if (!fixture.Enabled)
+            return;
+
+        var tenant = NewTenant();
+        var tenants = new TenantContextAccessor();
+        var firstEventId = Guid.NewGuid();
+        var firstOccurredAt = new DateTimeOffset(
+            2026,
+            7,
+            24,
+            9,
+            10,
+            11,
+            TimeSpan.Zero);
+        var @event = new MutableTestEvent(
+            firstEventId,
+            firstOccurredAt);
+        var payload = new byte[] { 0x10, 0x20 };
+        var poolBuilder = new NpgsqlConnectionStringBuilder(
+            fixture.RuntimeConnectionString)
+        {
+            MaxPoolSize = 1,
+            MinPoolSize = 1,
+        };
+        await using var constrainedPool =
+            NpgsqlDataSource.Create(poolBuilder.ConnectionString);
+        await using var heldConnection =
+            await constrainedPool.OpenConnectionAsync();
+        var store = new PostgreSqlEventStore(
+            constrainedPool,
+            tenants,
+            new Sha256HashChain());
+
+        StoredEvent stored;
+        using (tenants.BeginScope(tenant))
+        {
+            var pending = store.AppendAsync(
+                    @event,
+                    Metadata(AuditActor.System("snapshot")),
+                    payload)
+                .AsTask();
+            Assert.False(pending.IsCompleted);
+            Assert.Equal(1, @event.EventIdReadCount);
+            Assert.Equal(1, @event.OccurredAtReadCount);
+
+            @event.CurrentEventId = Guid.NewGuid();
+            @event.CurrentOccurredAt = firstOccurredAt.AddDays(1);
+            payload[0] = 0xFF;
+            await heldConnection.DisposeAsync();
+            stored = await pending;
+        }
+
+        Assert.Equal(1, @event.EventIdReadCount);
+        Assert.Equal(1, @event.OccurredAtReadCount);
+        Assert.Equal(firstEventId, stored.EventId);
+        Assert.Equal(firstOccurredAt, stored.OccurredAt);
+        Assert.Equal(new byte[] { 0x10, 0x20 }, stored.Payload);
+    }
+
+    [Fact]
     public async Task Every_opaque_actor_shape_round_trips()
     {
         if (!fixture.Enabled)
@@ -497,6 +559,150 @@ public sealed class PostgreSqlEventStoreTests(
     }
 
     [Fact]
+    public async Task Transaction_appender_reuses_one_tenant_and_rejects_switch()
+    {
+        if (!fixture.Enabled)
+            return;
+
+        var tenantA = NewTenant();
+        var tenantB = NewTenant();
+        var tenants = new TenantContextAccessor();
+        var appender = new PostgreSqlEventTransactionAppender(
+            new Sha256HashChain(),
+            TimeProvider.System);
+        var requests = Enumerable.Range(0, 4)
+            .Select(_ => PostgreSqlEventAppendRequest.Capture(
+                NewStandardEvent(),
+                Metadata(AuditActor.System("transaction-appender")),
+                ReadOnlyMemory<byte>.Empty))
+            .ToArray();
+
+        await using (var connection =
+            await fixture.RuntimeDataSource.OpenConnectionAsync())
+        await using (var transaction =
+            await connection.BeginTransactionAsync())
+        {
+            using (tenants.BeginScope(tenantA))
+            {
+                var firstBinding =
+                    await PostgreSqlTenantTransaction.BindAsync(
+                        connection,
+                        transaction,
+                        tenants);
+                var repeatedBinding =
+                    await PostgreSqlTenantTransaction.BindAsync(
+                        connection,
+                        transaction,
+                        tenants);
+                Assert.Equal(tenantA, firstBinding.Tenant);
+                Assert.Equal(tenantA, repeatedBinding.Tenant);
+
+                var first = await appender.AppendWithinTransactionAsync(
+                    repeatedBinding,
+                    requests[0],
+                    CancellationToken.None);
+                var second = await appender.AppendWithinTransactionAsync(
+                    repeatedBinding,
+                    requests[1],
+                    CancellationToken.None);
+                await transaction.CommitAsync();
+
+                Assert.Equal(1, first.Position);
+                Assert.Equal(2, second.Position);
+                Assert.Equal(first.Hash, second.PreviousHash);
+            }
+        }
+
+        await using (var connection =
+            await fixture.RuntimeDataSource.OpenConnectionAsync())
+        await using (var transaction =
+            await connection.BeginTransactionAsync())
+        {
+            PostgreSqlTenantTransaction boundTenant;
+            using (tenants.BeginScope(tenantA))
+            {
+                boundTenant =
+                    await PostgreSqlTenantTransaction.BindAsync(
+                        connection,
+                        transaction,
+                        tenants);
+                var uncommitted =
+                    await appender.AppendWithinTransactionAsync(
+                        boundTenant,
+                        requests[2],
+                        CancellationToken.None);
+                Assert.Equal(3, uncommitted.Position);
+            }
+
+            using (tenants.BeginScope(tenantB))
+            {
+                var switchedAmbient =
+                    await Assert.ThrowsAsync<EventIntegrityException>(
+                        () => appender.AppendWithinTransactionAsync(
+                                boundTenant,
+                                requests[3],
+                                CancellationToken.None)
+                            .AsTask());
+                Assert.Equal(
+                    "The database tenant context is invalid.",
+                    switchedAmbient.Message);
+
+                var switchedBinding =
+                    await Assert.ThrowsAsync<EventIntegrityException>(
+                        () => PostgreSqlTenantTransaction.BindAsync(
+                                connection,
+                                transaction,
+                                tenants)
+                            .AsTask());
+                Assert.Equal(
+                    "The database tenant context is invalid.",
+                    switchedBinding.Message);
+                Assert.Null(switchedBinding.InnerException);
+                AssertSafeFailure(
+                    switchedBinding.Message,
+                    tenantA,
+                    tenantB);
+            }
+
+            var missingAmbient =
+                await Assert.ThrowsAsync<EventIntegrityException>(
+                    () => appender.AppendWithinTransactionAsync(
+                            boundTenant,
+                            requests[3],
+                            CancellationToken.None)
+                        .AsTask());
+            Assert.Equal(
+                "The database tenant context is invalid.",
+                missingAmbient.Message);
+            await transaction.RollbackAsync();
+        }
+
+        await using (var firstConnection =
+            await fixture.RuntimeDataSource.OpenConnectionAsync())
+        await using (var firstTransaction =
+            await firstConnection.BeginTransactionAsync())
+        await using (var secondConnection =
+            await fixture.RuntimeDataSource.OpenConnectionAsync())
+        using (tenants.BeginScope(tenantA))
+        {
+            _ = await Assert.ThrowsAsync<ArgumentException>(
+                () => PostgreSqlTenantTransaction.BindAsync(
+                        secondConnection,
+                        firstTransaction,
+                        tenants)
+                    .AsTask());
+            await firstTransaction.RollbackAsync();
+        }
+
+        Assert.Equal(
+            (2L, 1L),
+            await CountTenantStateAsync(tenantA));
+        Assert.Equal(
+            (0L, 0L),
+            await CountTenantStateAsync(tenantB));
+    }
+
+    [Fact]
     public async Task Rls_and_transaction_local_context_fail_closed_without_pool_leakage()
     {
         if (!fixture.Enabled)
@@ -646,6 +852,7 @@ public sealed class PostgreSqlEventStoreTests(
             "DELETE FROM event_store.domain_events;",
             "TRUNCATE event_store.domain_events;",
             "ALTER TABLE event_store.domain_events DISABLE TRIGGER ALL;",
+            "CREATE TEMPORARY TABLE p1_t07_forbidden_temp (id integer);",
         })
         {
             await using var runtime =
@@ -1065,6 +1272,41 @@ public sealed class PostgreSqlEventStoreTests(
     private sealed record UndeclaredTestEvent(
         Guid EventId,
         DateTimeOffset OccurredAt) : IDomainEvent;
+
+    [DomainEventContract(
+        "tests.postgresql.mutable.v1",
+        EventPrivilege.Standard)]
+    private sealed class MutableTestEvent(
+        Guid eventId,
+        DateTimeOffset occurredAt) : IDomainEvent
+    {
+        public Guid CurrentEventId { get; set; } = eventId;
+
+        public DateTimeOffset CurrentOccurredAt { get; set; } =
+            occurredAt;
+
+        public int EventIdReadCount { get; private set; }
+
+        public int OccurredAtReadCount { get; private set; }
+
+        public Guid EventId
+        {
+            get
+            {
+                EventIdReadCount++;
+                return CurrentEventId;
+            }
+        }
+
+        public DateTimeOffset OccurredAt
+        {
+            get
+            {
+                OccurredAtReadCount++;
+                return CurrentOccurredAt;
+            }
+        }
+    }
 
     private sealed class FrozenTimeProvider(
         DateTimeOffset value) : TimeProvider

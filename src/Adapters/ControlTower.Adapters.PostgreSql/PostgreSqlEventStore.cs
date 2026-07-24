@@ -15,7 +15,7 @@ public sealed class PostgreSqlEventStore : IEventStore
 {
     private readonly NpgsqlDataSource _dataSource;
     private readonly ITenantContextAccessor _tenants;
-    private readonly PostgreSqlEventKernel _kernel;
+    private readonly PostgreSqlEventTransactionAppender _appender;
 
     public PostgreSqlEventStore(
         NpgsqlDataSource dataSource,
@@ -28,7 +28,7 @@ public sealed class PostgreSqlEventStore : IEventStore
         _tenants = tenants
             ?? throw new ArgumentNullException(nameof(tenants));
         ArgumentNullException.ThrowIfNull(chain);
-        _kernel = new PostgreSqlEventKernel(
+        _appender = new PostgreSqlEventTransactionAppender(
             chain,
             clock ?? TimeProvider.System);
     }
@@ -40,7 +40,10 @@ public sealed class PostgreSqlEventStore : IEventStore
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        var tenant = _tenants.Current;
+        var request = PostgreSqlEventAppendRequest.Capture(
+            @event,
+            metadata,
+            payload);
 
         try
         {
@@ -52,14 +55,17 @@ public sealed class PostgreSqlEventStore : IEventStore
                         IsolationLevel.ReadCommitted,
                         ct)
                     .ConfigureAwait(false);
+            var tenantTransaction =
+                await PostgreSqlTenantTransaction.BindAsync(
+                        connection,
+                        transaction,
+                        _tenants,
+                        ct)
+                    .ConfigureAwait(false);
 
-            var stored = await _kernel.AppendWithinTransactionAsync(
-                    connection,
-                    transaction,
-                    tenant,
-                    @event,
-                    metadata,
-                    payload,
+            var stored = await _appender.AppendWithinTransactionAsync(
+                    tenantTransaction,
+                    request,
                     ct)
                 .ConfigureAwait(false);
 
@@ -70,7 +76,7 @@ public sealed class PostgreSqlEventStore : IEventStore
         }
         catch (PostgresException)
         {
-            throw PostgreSqlEventKernel.RejectedAppend();
+            throw PostgreSqlEventTransactionAppender.RejectedAppend();
         }
     }
 
@@ -78,7 +84,6 @@ public sealed class PostgreSqlEventStore : IEventStore
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        var tenant = _tenants.Current;
 
         try
         {
@@ -90,12 +95,14 @@ public sealed class PostgreSqlEventStore : IEventStore
                         IsolationLevel.ReadCommitted,
                         ct)
                     .ConfigureAwait(false);
-            await PostgreSqlTenantSession.BindAsync(
-                    connection,
-                    transaction,
-                    tenant,
-                    ct)
-                .ConfigureAwait(false);
+            var tenantTransaction =
+                await PostgreSqlTenantTransaction.BindAsync(
+                        connection,
+                        transaction,
+                        _tenants,
+                        ct)
+                    .ConfigureAwait(false);
+            var tenant = tenantTransaction.Tenant;
 
             await using var command = new NpgsqlCommand(
                 """
@@ -123,7 +130,7 @@ public sealed class PostgreSqlEventStore : IEventStore
                 """,
                 connection,
                 transaction);
-            PostgreSqlTenantSession.AddTenantParameter(command, tenant);
+            PostgreSqlTenantBinding.AddTenantParameter(command, tenant);
 
             var stream = new List<StoredEvent>();
             await using (var reader =
@@ -219,39 +226,222 @@ public sealed class PostgreSqlEventStore : IEventStore
 }
 
 /// <summary>
-/// Transaction-aware E20 kernel. Later PostgreSQL adapters can compose authoritative state and its
-/// audit event in one transaction without duplicating event serialization or integrity logic.
+/// Non-owning, tenant-bound PostgreSQL transaction scope. The scope captures the ambient tenant
+/// before binding, cannot be retargeted, and never commits, rolls back or disposes its handles.
+/// Callers must not use a connection or transaction concurrently.
 /// </summary>
-internal sealed class PostgreSqlEventKernel(
-    IHashChain chain,
-    TimeProvider clock)
+public sealed class PostgreSqlTenantTransaction
 {
-    internal async ValueTask<StoredEvent> AppendWithinTransactionAsync(
+    private readonly ITenantContextAccessor _tenants;
+
+    private PostgreSqlTenantTransaction(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
-        TenantId tenant,
-        IDomainEvent @event,
-        EventAppendMetadata metadata,
-        ReadOnlyMemory<byte> payload,
-        CancellationToken ct)
+        ITenantContextAccessor tenants,
+        TenantId tenant)
+    {
+        Connection = connection;
+        Transaction = transaction;
+        _tenants = tenants;
+        Tenant = tenant;
+    }
+
+    internal NpgsqlConnection Connection { get; }
+
+    internal NpgsqlTransaction Transaction { get; }
+
+    public TenantId Tenant { get; }
+
+    /// <summary>
+    /// Captures the ambient tenant exactly once and binds it transaction-locally. Rebinding the same
+    /// transaction to the same tenant is idempotent; a different existing binding is rejected.
+    /// </summary>
+    public static ValueTask<PostgreSqlTenantTransaction> BindAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        ITenantContextAccessor tenants,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(transaction);
+        ArgumentNullException.ThrowIfNull(tenants);
+        ct.ThrowIfCancellationRequested();
+        if (!ReferenceEquals(transaction.Connection, connection))
+        {
+            throw new ArgumentException(
+                "The transaction does not belong to the supplied connection.",
+                nameof(transaction));
+        }
+
+        var tenant = tenants.Current;
+        if (tenant.Value == Guid.Empty)
+        {
+            throw new EventIntegrityException(
+                "The database tenant context is invalid.");
+        }
+
+        return BindCapturedAsync(
+            connection,
+            transaction,
+            tenants,
+            tenant,
+            ct);
+    }
+
+    internal void EnsureAmbientTenant()
+    {
+        try
+        {
+            if (_tenants.Current == Tenant)
+                return;
+        }
+        catch (InvalidOperationException)
+        {
+            // Fall through to the bounded rejection below.
+        }
+
+        throw new EventIntegrityException(
+            "The database tenant context is invalid.");
+    }
+
+    private static async ValueTask<PostgreSqlTenantTransaction>
+        BindCapturedAsync(
+            NpgsqlConnection connection,
+            NpgsqlTransaction transaction,
+            ITenantContextAccessor tenants,
+            TenantId tenant,
+            CancellationToken ct)
+    {
+        await PostgreSqlTenantBinding.BindAsync(
+                connection,
+                transaction,
+                tenant,
+                ct)
+            .ConfigureAwait(false);
+        return new PostgreSqlTenantTransaction(
+            connection,
+            transaction,
+            tenants,
+            tenant);
+    }
+}
+
+/// <summary>
+/// Immutable, caller-independent E20 input captured before database work begins.
+/// </summary>
+public sealed class PostgreSqlEventAppendRequest
+{
+    private readonly byte[] _payload;
+
+    private PostgreSqlEventAppendRequest(
+        Guid eventId,
+        DateTimeOffset occurredAt,
+        DomainEventContract contract,
+        EventReference aggregateReference,
+        AuditActor actor,
+        string? reason,
+        EventReference? correlationReference,
+        byte[] payload)
+    {
+        EventId = eventId;
+        OccurredAt = occurredAt;
+        EventType = contract.EventType;
+        Privilege = contract.Privilege;
+        AggregateReference = aggregateReference;
+        Actor = actor;
+        Reason = reason;
+        CorrelationReference = correlationReference;
+        _payload = payload;
+    }
+
+    internal Guid EventId { get; }
+
+    internal DateTimeOffset OccurredAt { get; }
+
+    internal string EventType { get; }
+
+    internal EventPrivilege Privilege { get; }
+
+    internal EventReference AggregateReference { get; }
+
+    internal AuditActor Actor { get; }
+
+    internal string? Reason { get; }
+
+    internal EventReference? CorrelationReference { get; }
+
+    internal ReadOnlyMemory<byte> Payload => _payload;
+
+    /// <summary>
+    /// Synchronously snapshots all caller-owned event input. The returned request owns its payload
+    /// bytes and can safely be used after the caller mutates its source objects or buffer.
+    /// </summary>
+    public static PostgreSqlEventAppendRequest Capture(
+        IDomainEvent @event,
+        EventAppendMetadata metadata,
+        ReadOnlyMemory<byte> payload)
+    {
         ArgumentNullException.ThrowIfNull(@event);
         ArgumentNullException.ThrowIfNull(metadata);
-        ct.ThrowIfCancellationRequested();
-
-        if (@event.EventId == Guid.Empty)
-            throw new EventIntegrityException("The event ID is invalid.");
 
         var contract = DomainEventContracts.Resolve(@event);
-        var occurredAt = EventEnvelopeCanonicalizer.NormalizeTimestamp(
-            @event.OccurredAt);
+        var eventId = @event.EventId;
+        var occurredAt = @event.OccurredAt;
+        var aggregateReference = metadata.AggregateReference;
+        var actor = metadata.Actor;
+        var reason = metadata.Reason;
+        var correlationReference = metadata.CorrelationReference;
         var ownedPayload = payload.ToArray();
+
+        if (eventId == Guid.Empty)
+            throw new EventIntegrityException("The event ID is invalid.");
+
+        return new PostgreSqlEventAppendRequest(
+            eventId,
+            EventEnvelopeCanonicalizer.NormalizeTimestamp(occurredAt),
+            contract,
+            aggregateReference,
+            actor,
+            reason,
+            correlationReference,
+            ownedPayload);
+    }
+}
+
+/// <summary>
+/// Transaction-aware E20 appender. PostgreSQL state adapters can compose authoritative state and
+/// its audit event in one transaction without duplicating event serialization or integrity logic.
+/// This type never commits or rolls back the caller-owned transaction.
+/// </summary>
+public sealed class PostgreSqlEventTransactionAppender
+{
+    private readonly IHashChain _chain;
+    private readonly TimeProvider _clock;
+
+    public PostgreSqlEventTransactionAppender(
+        IHashChain chain,
+        TimeProvider clock)
+    {
+        _chain = chain ?? throw new ArgumentNullException(nameof(chain));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+    }
+
+    public async ValueTask<StoredEvent> AppendWithinTransactionAsync(
+        PostgreSqlTenantTransaction tenantTransaction,
+        PostgreSqlEventAppendRequest request,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(tenantTransaction);
+        ArgumentNullException.ThrowIfNull(request);
+        ct.ThrowIfCancellationRequested();
+        tenantTransaction.EnsureAmbientTenant();
+        var connection = tenantTransaction.Connection;
+        var transaction = tenantTransaction.Transaction;
+        var tenant = tenantTransaction.Tenant;
 
         try
         {
-            await PostgreSqlTenantSession.BindAsync(
+            await PostgreSqlTenantBinding.BindAsync(
                     connection,
                     transaction,
                     tenant,
@@ -266,24 +456,24 @@ internal sealed class PostgreSqlEventKernel(
                     .ConfigureAwait(false);
 
             var recordedAt = EventEnvelopeCanonicalizer.NormalizeTimestamp(
-                clock.GetUtcNow());
+                _clock.GetUtcNow());
             var prospective = new StoredEvent(
                 EventEnvelopeCanonicalizer.CurrentIntegrityFormatVersion,
                 position,
-                @event.EventId,
-                contract.EventType,
-                metadata.AggregateReference,
-                metadata.Actor,
-                occurredAt,
+                request.EventId,
+                request.EventType,
+                request.AggregateReference,
+                request.Actor,
+                request.OccurredAt,
                 recordedAt,
-                metadata.Reason,
-                metadata.CorrelationReference,
+                request.Reason,
+                request.CorrelationReference,
                 tenant,
-                contract.Privilege,
+                request.Privilege,
                 previousHash,
                 string.Empty,
-                ownedPayload);
-            var hash = chain.ComputeNext(
+                request.Payload);
+            var hash = _chain.ComputeNext(
                 previousHash,
                 EventEnvelopeCanonicalizer.Canonicalize(prospective));
             var stored = prospective with { Hash = hash };
@@ -319,7 +509,7 @@ internal sealed class PostgreSqlEventKernel(
             """,
             connection,
             transaction);
-        PostgreSqlTenantSession.AddTenantParameter(command, tenant);
+        PostgreSqlTenantBinding.AddTenantParameter(command, tenant);
         await using var reader =
             await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         if (!await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -367,7 +557,7 @@ internal sealed class PostgreSqlEventKernel(
                 "integrity_format_version",
                 NpgsqlDbType.Integer)
             .Value = stored.IntegrityFormatVersion;
-        PostgreSqlTenantSession.AddTenantParameter(
+        PostgreSqlTenantBinding.AddTenantParameter(
             command,
             stored.Tenant);
         command.Parameters.Add("position", NpgsqlDbType.Bigint).Value =
@@ -433,7 +623,7 @@ internal sealed class PostgreSqlEventKernel(
     }
 }
 
-internal static class PostgreSqlTenantSession
+internal static class PostgreSqlTenantBinding
 {
     internal static async Task BindAsync(
         NpgsqlConnection connection,
@@ -441,7 +631,40 @@ internal static class PostgreSqlTenantSession
         TenantId tenant,
         CancellationToken ct)
     {
-        await using var command = new NpgsqlCommand(
+        var requestedTenant = tenant.Value.ToString("D");
+        await using (var currentCommand = new NpgsqlCommand(
+            """
+            SELECT NULLIF(
+                current_setting(
+                    'control_tower.tenant_id',
+                    true),
+                '');
+            """,
+            connection,
+            transaction))
+        {
+            var currentValue =
+                await currentCommand.ExecuteScalarAsync(ct)
+                    .ConfigureAwait(false);
+            var currentTenant = currentValue is null or DBNull
+                ? null
+                : (string)currentValue;
+            if (currentTenant is not null)
+            {
+                if (string.Equals(
+                        currentTenant,
+                        requestedTenant,
+                        StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                throw new EventIntegrityException(
+                    "The database tenant context is invalid.");
+            }
+        }
+
+        await using var bindCommand = new NpgsqlCommand(
             """
             SELECT set_config(
                 'control_tower.tenant_id',
@@ -450,11 +673,11 @@ internal static class PostgreSqlTenantSession
             """,
             connection,
             transaction);
-        command.Parameters.Add(
+        bindCommand.Parameters.Add(
                 "tenant_context",
                 NpgsqlDbType.Text)
-            .Value = tenant.Value.ToString("D");
-        _ = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            .Value = requestedTenant;
+        _ = await bindCommand.ExecuteScalarAsync(ct).ConfigureAwait(false);
     }
 
     internal static void AddTenantParameter(

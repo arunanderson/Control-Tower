@@ -177,6 +177,22 @@ BEGIN
         RAISE EXCEPTION 'runtime schema privileges are invalid';
     END IF;
 
+    IF NOT has_database_privilege(
+            runtime_role,
+            current_database(),
+            'CONNECT')
+       OR has_database_privilege(
+            runtime_role,
+            current_database(),
+            'CREATE')
+       OR has_database_privilege(
+            runtime_role,
+            current_database(),
+            'TEMPORARY')
+    THEN
+        RAISE EXCEPTION 'runtime database privileges are invalid';
+    END IF;
+
     IF NOT has_table_privilege(
             runtime_role,
             'event_store.domain_events',
@@ -241,6 +257,16 @@ BEGIN
               OR rolreplication))
     THEN
         RAISE EXCEPTION 'runtime role has forbidden cluster privileges';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM pg_auth_members AS membership
+        INNER JOIN pg_roles AS member_role
+            ON member_role.oid = membership.member
+        WHERE member_role.rolname = runtime_role)
+    THEN
+        RAISE EXCEPTION 'runtime role has forbidden role memberships';
     END IF;
 END;
 $$;

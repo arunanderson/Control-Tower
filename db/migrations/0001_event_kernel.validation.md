@@ -19,7 +19,8 @@ fixture refuses every non-loopback host before opening an administrative connect
 
 It performs this sequence:
 
-1. create the generated roles and empty database;
+1. refuse a pre-existing fixed runtime role, then create one generated migration-owner role, the
+   run-owned fixed runtime role and an empty generated database;
 2. apply the forward migration as the migration owner;
 3. execute `0001_event_kernel.verify.sql`;
 4. capture a canonical catalog fingerprint for the `event_store` schema;
@@ -29,7 +30,8 @@ It performs this sequence:
 8. re-run verification and compare the catalog fingerprint byte-for-byte;
 9. run RLS, least-privilege, immutability, concurrency, atomicity and hash-chain tests through the
    non-owner runtime role and the narrowly granted append functions;
-10. terminate connections, drop the disposable database, and drop both generated login roles.
+10. terminate connections and drop only the database and login roles whose creation this fixture
+    successfully completed.
 
 The GitHub workflow supplies only a loopback connection to its per-job PostgreSQL service. A normal
 solution test without the explicit ephemeral marker never opens a database connection.
@@ -44,6 +46,7 @@ solution test without the explicit ephemeral marker never opens a database conne
 - fixed-search-path security-definer functions that lock the tenant head and atomically insert an
   event plus advance that head without granting runtime table mutation privileges;
 - immutable update/delete/truncate triggers on committed event records;
-- least-privilege grants to `control_tower_runtime`;
+- least-privilege grants to `control_tower_runtime`, with database-default `PUBLIC` temporary-object
+  creation revoked by the forward migration and restored only by the guarded disposable rollback;
 - no runtime ownership, DDL, delete, truncate, superuser, role-creation, database-creation, or
-  `BYPASSRLS` capability.
+  `BYPASSRLS` capability, and no upward role membership.

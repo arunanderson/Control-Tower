@@ -17,6 +17,9 @@ public sealed class PostgreSqlEventKernelFixture : IAsyncLifetime
     private NpgsqlDataSource? _adminDataSource;
     private string? _migratorPassword;
     private string? _runtimePassword;
+    private bool _migratorRoleCreated;
+    private bool _runtimeRoleCreated;
+    private bool _databaseCreated;
 
     public bool Enabled { get; private set; }
     public bool MigrationCycleVerified { get; private set; }
@@ -77,6 +80,27 @@ public sealed class PostgreSqlEventKernelFixture : IAsyncLifetime
                     "P1-T07 requires the approved PostgreSQL 16.14 image.");
             }
 
+            await using (var roleCollision = new NpgsqlCommand(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_roles
+                    WHERE rolname = @runtime_role);
+                """,
+                admin))
+            {
+                roleCollision.Parameters.AddWithValue(
+                    "runtime_role",
+                    RuntimeRole);
+                if (Equals(
+                        await roleCollision.ExecuteScalarAsync(),
+                        true))
+                {
+                    throw new InvalidOperationException(
+                        "The ephemeral PostgreSQL runtime role already exists.");
+                }
+            }
+
             await ExecuteFormattedDdlAsync(
                 admin,
                 """
@@ -87,6 +111,7 @@ public sealed class PostgreSqlEventKernelFixture : IAsyncLifetime
                 """,
                 MigratorRole,
                 _migratorPassword);
+            _migratorRoleCreated = true;
             await ExecuteFormattedDdlAsync(
                 admin,
                 """
@@ -97,6 +122,7 @@ public sealed class PostgreSqlEventKernelFixture : IAsyncLifetime
                 """,
                 RuntimeRole,
                 _runtimePassword);
+            _runtimeRoleCreated = true;
             await ExecuteFormattedDdlAsync(
                 admin,
                 """
@@ -107,6 +133,7 @@ public sealed class PostgreSqlEventKernelFixture : IAsyncLifetime
                 """,
                 DatabaseName,
                 MigratorRole);
+            _databaseCreated = true;
         }
 
         MigrationDataSource = NpgsqlDataSource.Create(
@@ -204,7 +231,7 @@ public sealed class PostgreSqlEventKernelFixture : IAsyncLifetime
         {
             await using var admin =
                 await _adminDataSource.OpenConnectionAsync();
-            if (DatabaseName.Length > 0)
+            if (_databaseCreated && DatabaseName.Length > 0)
             {
                 await using (var terminate = new NpgsqlCommand(
                     """
@@ -224,18 +251,24 @@ public sealed class PostgreSqlEventKernelFixture : IAsyncLifetime
                     admin,
                     "DROP DATABASE IF EXISTS %I;",
                     DatabaseName);
+                _databaseCreated = false;
             }
 
-            await ExecuteFormattedDdlAsync(
-                admin,
-                "DROP ROLE IF EXISTS %I;",
-                RuntimeRole);
-            if (MigratorRole.Length > 0)
+            if (_runtimeRoleCreated)
+            {
+                await ExecuteFormattedDdlAsync(
+                    admin,
+                    "DROP ROLE IF EXISTS %I;",
+                    RuntimeRole);
+                _runtimeRoleCreated = false;
+            }
+            if (_migratorRoleCreated && MigratorRole.Length > 0)
             {
                 await ExecuteFormattedDdlAsync(
                     admin,
                     "DROP ROLE IF EXISTS %I;",
                     MigratorRole);
+                _migratorRoleCreated = false;
             }
         }
         finally
