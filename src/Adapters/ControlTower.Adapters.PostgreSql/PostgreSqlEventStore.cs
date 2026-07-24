@@ -314,7 +314,7 @@ internal sealed class PostgreSqlEventKernel(
     {
         await using var command = new NpgsqlCommand(
             """
-            SELECT position, previous_hash
+            SELECT stream_position, previous_hash
             FROM event_store.lock_stream_head(@tenant_id);
             """,
             connection,

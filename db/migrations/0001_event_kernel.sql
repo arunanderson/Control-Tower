@@ -207,7 +207,7 @@ USING (tenant_id = event_store.current_tenant_id());
 
 CREATE FUNCTION event_store.lock_stream_head(requested_tenant uuid)
 RETURNS TABLE (
-    position bigint,
+    stream_position bigint,
     previous_hash varchar(64))
 LANGUAGE plpgsql
 SECURITY DEFINER
