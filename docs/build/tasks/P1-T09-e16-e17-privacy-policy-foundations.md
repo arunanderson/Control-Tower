@@ -5,7 +5,7 @@ type: task-contract
 schema_version: 1
 epic: EPIC-1-2
 phase: PHASE-1
-status: in-progress
+status: complete
 objective: Implement the frozen tenant-scoped versioned E16 JurisdictionProfile and bitemporal E17 TelemetryPolicy semantics, ports, canonical events and development in-memory adapters needed before either privacy gate can be connected.
 blueprint_refs:
   - docs/blueprint/stage-04-domain-model.md#27-orgmodel--jurisdictionprofile-c5
