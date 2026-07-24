@@ -5,7 +5,7 @@ type: task-contract
 schema_version: 1
 epic: EPIC-1-2
 phase: PHASE-1
-status: in-progress
+status: complete
 objective: Implement the frozen IEventStore contract as a tenant-isolated append-only PostgreSQL adapter, author migration 0001, and prove its integrity and isolation properties only against disposable PostgreSQL 16 containers.
 blueprint_refs:
   - docs/blueprint/stage-04-domain-model.md#9-audit-model-the-event-record-is-the-audit-trail
